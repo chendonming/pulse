@@ -21,6 +21,8 @@ export default function App() {
         onRenameRequest={state.renameCollectionRequest}
         onAddCollection={state.addCollection}
         onUpdateCollectionAuth={state.updateCollectionAuth}
+        onMoveRequest={state.moveRequest}
+        onMoveCollection={state.moveCollection}
         /* ── Environment props ── */
         environments={state.environments}
         activeEnvironmentId={state.activeEnvironmentId}

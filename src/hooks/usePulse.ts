@@ -76,7 +76,7 @@ export function usePulse() {
     {
       id: "default",
       name: "My Collection",
-      authType: "none",
+      authType: "inherit",
       bearerToken: "",
       requests: [
         {
@@ -177,7 +177,7 @@ export function usePulse() {
         if (editingRequest) {
           const col = collections.find((c) => c.id === editingRequest.collectionId);
           if (col) {
-            resolvedAuthType = col.authType;
+            resolvedAuthType = col.authType === "inherit" ? "none" : col.authType;
             resolvedBearerToken = col.bearerToken;
           } else {
             resolvedAuthType = "none";
@@ -412,7 +412,7 @@ export function usePulse() {
       if (collections.length === 0) {
         colId = crypto.randomUUID();
         setCollections([
-          { id: colId, name: "My Collection", authType: "none", bearerToken: "", requests: [newReq] },
+          { id: colId, name: "My Collection", authType: "inherit", bearerToken: "", requests: [newReq] },
         ]);
       } else {
         colId = collections[0].id;
@@ -492,7 +492,7 @@ export function usePulse() {
     const newCol: Collection = {
       id: crypto.randomUUID(),
       name: name.trim(),
-      authType: "none",
+      authType: "inherit",
       bearerToken: "",
       requests: [],
     };
@@ -509,6 +509,55 @@ export function usePulse() {
     },
     [],
   );
+
+  const moveRequest = useCallback(
+    (sourceColId: string, requestId: string, targetColId: string, targetIndex: number) => {
+      setCollections((prev) => {
+        const sourceCol = prev.find((c) => c.id === sourceColId);
+        if (!sourceCol) return prev;
+        const req = sourceCol.requests.find((r) => r.id === requestId);
+        if (!req) return prev;
+
+        // Remove from source
+        const withoutReq = sourceCol.requests.filter((r) => r.id !== requestId);
+
+        if (sourceColId === targetColId) {
+          // Reorder within same collection
+          const newRequests = [...withoutReq];
+          newRequests.splice(targetIndex, 0, req);
+          return prev.map((c) =>
+            c.id === sourceColId ? { ...c, requests: newRequests } : c,
+          );
+        }
+
+        // Move to different collection
+        return prev.map((c) => {
+          if (c.id === sourceColId) {
+            return { ...c, requests: withoutReq };
+          }
+          if (c.id === targetColId) {
+            const newRequests = [...c.requests];
+            newRequests.splice(targetIndex, 0, req);
+            return { ...c, requests: newRequests };
+          }
+          return c;
+        });
+      });
+    },
+    [],
+  );
+
+  const moveCollection = useCallback((collectionId: string, targetIndex: number) => {
+    setCollections((prev) => {
+      const idx = prev.findIndex((c) => c.id === collectionId);
+      if (idx === -1) return prev;
+      const col = prev[idx];
+      const without = prev.filter((c) => c.id !== collectionId);
+      const result = [...without];
+      result.splice(targetIndex, 0, col);
+      return result;
+    });
+  }, []);
 
   // Derive the collection name for the currently-editing request (used by AuthPanel)
   const editingCollectionName = editingRequest
@@ -622,6 +671,8 @@ export function usePulse() {
     renameCollectionRequest,
     addCollection,
     updateCollectionAuth,
+    moveRequest,
+    moveCollection,
     editingCollectionName,
     editingRequest,
     /* ── Environment exports ── */
