@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Pulse",
         "width": 1400,
         "height": 900,

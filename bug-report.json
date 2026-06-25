@@ -1,0 +1,79 @@
+[
+  {
+    "severity": "HIGH",
+    "file": "src-tauri/src/lib.rs",
+    "function": "truncate_body",
+    "line": 89,
+    "title": "UTF-8 string slicing panic on multi-byte boundary",
+    "description": "String slicing at byte index s[..MAX_LOG_BODY_LEN] panics if index 10,000 falls in the middle of a multi-byte UTF-8 character. Any HTTP body containing non-ASCII characters (JSON with Unicode, Chinese text, emoji, HTML entities, etc.) that exceeds MAX_LOG_BODY_LEN will crash the Tauri command. Fix: use s.floor_char_boundary(10000) (stable since Rust 1.70) or iterate via char_indices.",
+    "repro": "Send a request whose response body has a multi-byte UTF-8 character straddling byte 10000.",
+    "fix": "Replace s[..MAX_LOG_BODY_LEN] with s[..s.floor_char_boundary(MAX_LOG_BODY_LEN)]"
+  },
+  {
+    "severity": "HIGH",
+    "file": "src/LogViewer.tsx",
+    "function": "useEffect (get_logs)",
+    "line": 274,
+    "title": "Unhandled promise rejection on invoke('get_logs')",
+    "description": "invoke('get_logs').then() has no .catch() handler. If the Rust command returns an error (poisoned Mutex, deserialization failure, etc.), the promise rejects with an uncaught rejection. The app silently shows an empty log list with no user-visible error.",
+    "fix": "Add .catch(err => console.error('Failed to load logs:', err)) or surface via a state variable."
+  },
+  {
+    "severity": "HIGH",
+    "file": "src/LogViewer.tsx",
+    "function": "useEffect (get_logs + listen race)",
+    "lines": [274, 283],
+    "title": "Race condition: get_logs response overwrites state set by concurrent http-log event",
+    "description": "Timeline: (1) invoke('get_logs') starts. (2) listen('http-log') registers. (3) http-log event fires, listener adds entry via functional setEntries update. (4) get_logs resolves, setEntries(history) replaces the entire state unconditionally — any entries added by the listener in step 3 are silently lost. The listener's dedup logic only prevents duplicates, not overwrites.",
+    "repro": "Send a request quickly after LogViewer mounts; the new entry arrives before get_logs returns, then get_logs overwrites and loses it.",
+    "fix": "Use the functional update form: setEntries(prev => { const ids = new Set(prev.map(e => e.id)); const merged = [...prev, ...history.filter(h => !ids.has(h.id))]; ... }) or set a loaded flag and ignore stale responses."
+  },
+  {
+    "severity": "MEDIUM",
+    "file": "src/LogViewer.tsx",
+    "function": "copyText (module-level)",
+    "line": 45,
+    "title": "Stale timeout on component unmount with direct DOM mutation",
+    "description": "copyTimer is a module-level let binding with no cleanup. If the component unmounts while the 1200ms timer is pending, the timeout fires on a stale btn reference (likely a detached DOM node). Setting textContent on a detached node is harmless, but the timer also leaks (keeps the callback closure alive). Additionally, copyText mutates btn.textContent directly while React controls the DOM, so a coincident React re-render of the parent component will reset the button text to 'Copy' before the timer fires, leaving 'Copied!' in a stale closure."
+  },
+  {
+    "severity": "LOW",
+    "file": "src/LogViewer.tsx",
+    "function": "copyText (module-level)",
+    "line": 63,
+    "title": "copyText does not close the interval gap on rapid successive clicks",
+    "description": "Because copyTimer is module-level and not tied to a specific button instance, rapidly clicking 'Copy' on two different buttons discards the first button's timer. The first button is left showing 'Copied!' permanently (until a later re-render resets it via React, or another click on that same button). This is a minor UX glitch."
+  },
+  {
+    "severity": "LOW",
+    "file": "src/LogViewer.tsx",
+    "function": "HeaderTable key={i}",
+    "line": 85,
+    "title": "Non-deterministic row ordering for object-type headers",
+    "description": "When headers is a Record<string, string> (response_headers from Rust's HashMap), Object.entries(header) iterates in HashMap order, which is non-deterministic in Rust. Combined with key={i}, React may recreate all table rows on every render if the entry order changes, causing unnecessary DOM churn. For the array-type branch (request_headers), key={i} is fine since the Vec preserves insertion order."
+  },
+  {
+    "severity": "LOW",
+    "file": "src-tauri/src/lib.rs",
+    "function": "send_request",
+    "line": 279,
+    "title": "Silently dropped log entry when Mutex is poisoned",
+    "description": "if let Ok(mut store) = store.lock() silently ignores a poisoned mutex. If a previous send_request panicked while holding the lock, all subsequent requests complete successfully but produce no log entries and no warning. The `get_logs` and `clear_logs` commands similarly use `map_err` but log locking failures only as an Err string, which propagates to the frontend as an unhandled rejection."
+  },
+  {
+    "severity": "LOW",
+    "file": "src/LogViewer.tsx",
+    "function": "handleScroll",
+    "line": 326,
+    "title": "Excessive re-renders on every scroll event",
+    "description": "handleScroll calls setAutoScroll on every scroll event, triggering a React re-render. In a virtualized list with overscan 15, each scroll pixel change causes a state update. While useCallback with [] deps keeps the callback stable, this is still O(scroll-events) re-renders. A debounce or ref-based approach would be more efficient."
+  },
+  {
+    "severity": "LOW",
+    "file": "src/main.tsx",
+    "function": "Main",
+    "line": 9,
+    "title": "getCurrentWindow() called during render without error boundary",
+    "description": "getCurrentWindow() accesses window.__TAURI__ internals during React's render phase. In Tauri v2 this is safe under normal conditions, but if the API surface changes, the function is called outside a plugin lifecycle guard, or during SSR/hydration, it could throw and crash the entire React tree since there is no error boundary wrapping <Main />."
+  }
+]

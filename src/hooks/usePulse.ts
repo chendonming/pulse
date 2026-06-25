@@ -142,7 +142,7 @@ export function usePulse() {
     } finally {
       setIsLoading(false);
     }
-  }, [method, url, headers, body, contentType]);
+  }, [method, url, headers, body, contentType, authType, bearerToken]);
 
   const addHeader = useCallback(() => {
     setHeaders((prev) => [...prev, { key: "", value: "", enabled: true }]);

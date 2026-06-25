@@ -61,5 +61,21 @@ export interface AuthConfig {
   bearerToken: string;
 }
 
+export interface LogEntry {
+  id: number;
+  timestamp: number;
+  method: string;
+  url: string;
+  status: number;
+  status_text: string;
+  size_label: string;
+  total_ms: number;
+  content_type: string | null;
+  error: string | null;
+  request_headers: HeaderInput[];
+  request_body: string | null;
+  response_headers: Record<string, string>;
+}
+
 export type RequestTab = "params" | "auth" | "headers" | "body";
 export type SidebarTab = "collections" | "history";
