@@ -1,5 +1,6 @@
 import type { ResponseData } from "../types";
 import WaterfallChart from "./WaterfallChart";
+import JsonHighlighter from "./JsonHighlighter";
 
 interface ResponsePanelProps {
   response: ResponseData | null;
@@ -23,19 +24,6 @@ function getStatusBarColor(status: number): string {
   if (status >= 300 && status < 400) return "bg-pulse-blue";
   if (status >= 400 && status < 500) return "bg-pulse-amber";
   return "bg-pulse-rose";
-}
-
-/** 格式化响应体：JSON 自动美化排版 */
-function formatBody(body: string, contentType?: string | null): string {
-  if (!body) return "";
-  if (contentType?.includes("json")) {
-    try {
-      return JSON.stringify(JSON.parse(body), null, 2);
-    } catch {
-      return body;
-    }
-  }
-  return body;
 }
 
 /**
@@ -202,11 +190,7 @@ export default function ResponsePanel({
         <div className="flex-1 overflow-auto">
           {responseTab === "body" ? (
             <pre className="p-4 text-xs font-mono text-pulse-text-primary whitespace-pre-wrap break-all">
-              {formatBody(response.body, response.content_type) || (
-                <span className="text-pulse-text-muted italic">
-                  Empty response body
-                </span>
-              )}
+              <JsonHighlighter body={response.body} contentType={response.content_type} />
             </pre>
           ) : (
             <div className="p-3 space-y-1">
