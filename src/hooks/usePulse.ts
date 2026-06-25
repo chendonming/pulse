@@ -7,6 +7,7 @@ import type {
   HeaderInput,
   ResponseData,
   Collection,
+  RequestItem,
   HistoryItem,
   AuthType,
   Environment,
@@ -70,7 +71,7 @@ export function usePulse() {
 
   const [responseTab, setResponseTab] = useState<"body" | "headers">("body");
 
-  const [collections, _setCollections] = useState<Collection[]>(() => [
+  const [collections, setCollections] = useState<Collection[]>(() => [
     {
       id: "default",
       name: "My Collection",
@@ -80,12 +81,24 @@ export function usePulse() {
           name: "JSONPlaceholder Posts",
           method: "GET",
           url: "https://jsonplaceholder.typicode.com/posts/1",
+          headers: [{ key: "", value: "", enabled: true }],
+          body: "",
+          contentType: "application/json",
+          authType: "none",
+          bearerToken: "",
+          params: [{ key: "", value: "", enabled: true }],
         },
         {
           id: "example-2",
           name: "Create Post",
           method: "POST",
           url: "https://jsonplaceholder.typicode.com/posts",
+          headers: [{ key: "", value: "", enabled: true }],
+          body: JSON.stringify({ title: "foo", body: "bar", userId: 1 }, null, 2),
+          contentType: "application/json",
+          authType: "none",
+          bearerToken: "",
+          params: [{ key: "", value: "", enabled: true }],
         },
       ],
     },
@@ -97,6 +110,12 @@ export function usePulse() {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [activeEnvironmentId, setActiveEnvironmentId] = useState<string | null>(null);
   const [envLoaded, setEnvLoaded] = useState(false);
+
+  /* ── Collection editing state ── */
+  const [editingRequest, setEditingRequest] = useState<{
+    collectionId: string;
+    requestId: string;
+  } | null>(null);
 
   // Load environments from Rust on mount
   useEffect(() => {
@@ -245,13 +264,24 @@ export function usePulse() {
     setMethod(item.method as HttpMethod);
     setUrl(item.url);
     setRawParams(parseUrlParams(item.url));
+    setEditingRequest(null);
   }, []);
 
   const loadCollectionRequest = useCallback(
-    (item: { method: string; url: string }) => {
+    (item: RequestItem, collectionId: string) => {
       setMethod(item.method as HttpMethod);
       setUrl(item.url);
-      setRawParams(parseUrlParams(item.url));
+      setHeaders(
+        item.headers?.length ? item.headers : [{ key: "", value: "", enabled: true }],
+      );
+      setBody(item.body ?? "");
+      setContentType(item.contentType ?? "application/json");
+      setAuthType((item.authType as AuthType) ?? "none");
+      setBearerToken(item.bearerToken ?? "");
+      setRawParams(
+        item.params?.length ? item.params : [{ key: "", value: "", enabled: true }],
+      );
+      setEditingRequest({ collectionId, requestId: item.id });
     },
     [],
   );
@@ -260,6 +290,171 @@ export function usePulse() {
     setResponse(null);
     setError(null);
   }, []);
+
+  /* ── Collection CRUD ── */
+
+  const newRequest = useCallback(() => {
+    setMethod("GET");
+    setUrl("");
+    setHeaders([{ key: "", value: "", enabled: true }]);
+    setBody("");
+    setContentType("application/json");
+    setAuthType("none");
+    setBearerToken("");
+    setRawParams([{ key: "", value: "", enabled: true }]);
+    setResponse(null);
+    setError(null);
+    setEditingRequest(null);
+  }, []);
+
+  const saveCurrentRequest = useCallback(() => {
+    const filteredHeaders = headers
+      .filter((h) => h.key.trim())
+      .concat(
+        headers.some((h) => h.key.trim()) ? [] : [{ key: "", value: "", enabled: true } as HeaderInput],
+      );
+    if (filteredHeaders.length === 0) {
+      filteredHeaders.push({ key: "", value: "", enabled: true });
+    }
+
+    if (editingRequest) {
+      // Update existing request in-place
+      setCollections((prev) =>
+        prev.map((c) =>
+          c.id === editingRequest.collectionId
+            ? {
+                ...c,
+                requests: c.requests.map((r) =>
+                  r.id === editingRequest.requestId
+                    ? {
+                        ...r,
+                        name: r.name,
+                        method,
+                        url: url.trim(),
+                        headers: filteredHeaders,
+                        body,
+                        contentType,
+                        authType,
+                        bearerToken,
+                        params: rawParams,
+                      }
+                    : r,
+                ),
+              }
+            : c,
+        ),
+      );
+    } else {
+      const name =
+        window.prompt(
+          "Request name:",
+          url.trim()
+            ? url.trim().split("/").filter(Boolean).pop() || url.trim()
+            : "New Request",
+        ) ?? "";
+      if (!name.trim()) return;
+
+      const newReq: RequestItem = {
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        method,
+        url: url.trim(),
+        headers: filteredHeaders,
+        body,
+        contentType,
+        authType,
+        bearerToken,
+        params: rawParams,
+      };
+
+      let colId: string;
+      if (collections.length === 0) {
+        colId = crypto.randomUUID();
+        setCollections([
+          { id: colId, name: "My Collection", requests: [newReq] },
+        ]);
+      } else {
+        colId = collections[0].id;
+        setCollections((prev) =>
+          prev.map((c) =>
+            c.id === colId
+              ? { ...c, requests: [...c.requests, newReq] }
+              : c,
+          ),
+        );
+      }
+      setEditingRequest({ collectionId: colId, requestId: newReq.id });
+    }
+  }, [
+    method,
+    url,
+    headers,
+    body,
+    contentType,
+    authType,
+    bearerToken,
+    rawParams,
+    editingRequest,
+    collections,
+  ]);
+
+  const deleteCollectionRequest = useCallback(
+    (collectionId: string, requestId: string) => {
+      setCollections((prev) =>
+        prev.map((c) =>
+          c.id === collectionId
+            ? {
+                ...c,
+                requests: c.requests.filter((r) => r.id !== requestId),
+              }
+            : c,
+        ),
+      );
+      if (
+        editingRequest?.collectionId === collectionId &&
+        editingRequest?.requestId === requestId
+      ) {
+        setEditingRequest(null);
+      }
+    },
+    [editingRequest],
+  );
+
+  const renameCollectionRequest = useCallback(
+    (collectionId: string, requestId: string) => {
+      const col = collections.find((c) => c.id === collectionId);
+      const req = col?.requests.find((r) => r.id === requestId);
+      if (!req) return;
+      const name =
+        window.prompt("Rename request:", req.name) ?? "";
+      if (!name.trim()) return;
+      setCollections((prev) =>
+        prev.map((c) =>
+          c.id === collectionId
+            ? {
+                ...c,
+                requests: c.requests.map((r) =>
+                  r.id === requestId ? { ...r, name: name.trim() } : r,
+                ),
+              }
+            : c,
+        ),
+      );
+    },
+    [collections],
+  );
+
+  const addCollection = useCallback(() => {
+    const name =
+      window.prompt("Collection name:", `Collection ${collections.length + 1}`) ?? "";
+    if (!name.trim()) return;
+    const newCol: Collection = {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      requests: [],
+    };
+    setCollections((prev) => [...prev, newCol]);
+  }, [collections.length]);
 
   /* ── Environment CRUD ── */
 
@@ -361,6 +556,13 @@ export function usePulse() {
     loadFromHistory,
     loadCollectionRequest,
     clearResponse,
+    /* ── Collection CRUD exports ── */
+    newRequest,
+    saveCurrentRequest,
+    deleteCollectionRequest,
+    renameCollectionRequest,
+    addCollection,
+    editingRequest,
     /* ── Environment exports ── */
     environments,
     activeEnvironmentId,

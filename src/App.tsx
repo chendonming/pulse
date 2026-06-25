@@ -15,6 +15,11 @@ export default function App() {
         onTabChange={state.setSidebarTab}
         onLoadHistory={state.loadFromHistory}
         onLoadRequest={state.loadCollectionRequest}
+        /* ── New request & collection management ── */
+        onNewRequest={state.newRequest}
+        onDeleteRequest={state.deleteCollectionRequest}
+        onRenameRequest={state.renameCollectionRequest}
+        onAddCollection={state.addCollection}
         /* ── Environment props ── */
         environments={state.environments}
         activeEnvironmentId={state.activeEnvironmentId}
@@ -45,6 +50,8 @@ export default function App() {
           onRequestTabChange={state.setRequestTab}
           isLoading={state.isLoading}
           onSend={state.sendRequest}
+          onSave={state.saveCurrentRequest}
+          editingRequest={state.editingRequest}
           authType={state.authType}
           onAuthTypeChange={state.setAuthType}
           bearerToken={state.bearerToken}

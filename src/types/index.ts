@@ -35,6 +35,12 @@ export interface RequestItem {
   name: string;
   method: string;
   url: string;
+  headers: HeaderInput[];
+  body: string;
+  contentType: string;
+  authType: AuthType;
+  bearerToken: string;
+  params: HeaderInput[];
 }
 
 export interface HistoryItem {
