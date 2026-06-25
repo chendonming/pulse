@@ -13,6 +13,7 @@ import type {
   Environment,
   EnvironmentVariable,
   EnvironmentData,
+  CollectionData,
 } from "../types";
 
 /* ── Query-string helpers ── */
@@ -75,6 +76,8 @@ export function usePulse() {
     {
       id: "default",
       name: "My Collection",
+      authType: "none",
+      bearerToken: "",
       requests: [
         {
           id: "example-1",
@@ -84,7 +87,7 @@ export function usePulse() {
           headers: [{ key: "", value: "", enabled: true }],
           body: "",
           contentType: "application/json",
-          authType: "none",
+          authType: "inherit",
           bearerToken: "",
           params: [{ key: "", value: "", enabled: true }],
         },
@@ -96,7 +99,7 @@ export function usePulse() {
           headers: [{ key: "", value: "", enabled: true }],
           body: JSON.stringify({ title: "foo", body: "bar", userId: 1 }, null, 2),
           contentType: "application/json",
-          authType: "none",
+          authType: "inherit",
           bearerToken: "",
           params: [{ key: "", value: "", enabled: true }],
         },
@@ -110,6 +113,7 @@ export function usePulse() {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [activeEnvironmentId, setActiveEnvironmentId] = useState<string | null>(null);
   const [envLoaded, setEnvLoaded] = useState(false);
+  const [collectionsLoaded, setCollectionsLoaded] = useState(false);
 
   /* ── Collection editing state ── */
   const [editingRequest, setEditingRequest] = useState<{
@@ -136,6 +140,26 @@ export function usePulse() {
     }).catch((e) => console.error("Failed to save environments:", e));
   }, [environments, activeEnvironmentId, envLoaded]);
 
+  // Load collections from Rust on mount
+  useEffect(() => {
+    invoke<CollectionData | null>("load_collections")
+      .then((data) => {
+        if (data?.collections?.length) {
+          setCollections(data.collections);
+        }
+      })
+      .catch((e) => console.error("Failed to load collections:", e))
+      .finally(() => setCollectionsLoaded(true));
+  }, []);
+
+  // Persist collections to Rust whenever they change (skip the initial load)
+  useEffect(() => {
+    if (!collectionsLoaded) return;
+    invoke("save_collections", {
+      data: { collections },
+    }).catch((e) => console.error("Failed to save collections:", e));
+  }, [collections, collectionsLoaded]);
+
   const sendRequest = useCallback(async () => {
     if (!url.trim()) return;
 
@@ -146,9 +170,26 @@ export function usePulse() {
     try {
       let cleanHeaders = headers.filter((h) => h.key.trim() !== "");
 
+      // Resolve auth: inherit → look up collection's auth
+      let resolvedAuthType = authType;
+      let resolvedBearerToken = bearerToken;
+      if (authType === "inherit") {
+        if (editingRequest) {
+          const col = collections.find((c) => c.id === editingRequest.collectionId);
+          if (col) {
+            resolvedAuthType = col.authType;
+            resolvedBearerToken = col.bearerToken;
+          } else {
+            resolvedAuthType = "none";
+          }
+        } else {
+          resolvedAuthType = "none";
+        }
+      }
+
       // Inject auth header if Bearer Token is configured
-      if (authType === "bearer" && bearerToken.trim()) {
-        let token = bearerToken.trim();
+      if (resolvedAuthType === "bearer" && resolvedBearerToken.trim()) {
+        let token = resolvedBearerToken.trim();
         if (!token.startsWith("Bearer ")) {
           token = `Bearer ${token}`;
         }
@@ -193,7 +234,7 @@ export function usePulse() {
     } finally {
       setIsLoading(false);
     }
-  }, [method, url, headers, body, contentType, authType, bearerToken, environments, activeEnvironmentId]);
+  }, [method, url, headers, body, contentType, authType, bearerToken, environments, activeEnvironmentId, collections, editingRequest]);
 
   const addHeader = useCallback(() => {
     setHeaders((prev) => [...prev, { key: "", value: "", enabled: true }]);
@@ -371,7 +412,7 @@ export function usePulse() {
       if (collections.length === 0) {
         colId = crypto.randomUUID();
         setCollections([
-          { id: colId, name: "My Collection", requests: [newReq] },
+          { id: colId, name: "My Collection", authType: "none", bearerToken: "", requests: [newReq] },
         ]);
       } else {
         colId = collections[0].id;
@@ -451,10 +492,28 @@ export function usePulse() {
     const newCol: Collection = {
       id: crypto.randomUUID(),
       name: name.trim(),
+      authType: "none",
+      bearerToken: "",
       requests: [],
     };
     setCollections((prev) => [...prev, newCol]);
   }, [collections.length]);
+
+  const updateCollectionAuth = useCallback(
+    (collectionId: string, authType: AuthType, bearerToken: string) => {
+      setCollections((prev) =>
+        prev.map((c) =>
+          c.id === collectionId ? { ...c, authType, bearerToken } : c,
+        ),
+      );
+    },
+    [],
+  );
+
+  // Derive the collection name for the currently-editing request (used by AuthPanel)
+  const editingCollectionName = editingRequest
+    ? collections.find((c) => c.id === editingRequest.collectionId)?.name ?? null
+    : null;
 
   /* ── Environment CRUD ── */
 
@@ -562,6 +621,8 @@ export function usePulse() {
     deleteCollectionRequest,
     renameCollectionRequest,
     addCollection,
+    updateCollectionAuth,
+    editingCollectionName,
     editingRequest,
     /* ── Environment exports ── */
     environments,

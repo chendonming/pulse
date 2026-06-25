@@ -21,6 +21,7 @@ interface RequestPanelProps {
   onSend: () => void;
   onSave: () => void;
   editingRequest: { collectionId: string; requestId: string } | null;
+  editingCollectionName: string | null;
   authType: AuthType;
   onAuthTypeChange: (t: AuthType) => void;
   bearerToken: string;
@@ -78,6 +79,7 @@ export default function RequestPanel({
   onSend,
   onSave,
   editingRequest,
+  editingCollectionName,
   authType,
   onAuthTypeChange,
   bearerToken,
@@ -240,9 +242,14 @@ export default function RequestPanel({
           }`}
         >
           Auth
-          {authType !== "none" && (
+          {authType === "bearer" && (
             <span className="ml-1.5 px-1 py-0.5 text-[10px] rounded bg-pulse-accent/10 text-pulse-accent">
               Bearer
+            </span>
+          )}
+          {authType === "inherit" && editingCollectionName && (
+            <span className="ml-1.5 px-1 py-0.5 text-[10px] rounded bg-pulse-indigo/10 text-pulse-indigo">
+              Inherit
             </span>
           )}
         </button>
@@ -301,6 +308,7 @@ export default function RequestPanel({
             onAuthTypeChange={onAuthTypeChange}
             bearerToken={bearerToken}
             onBearerTokenChange={onBearerTokenChange}
+            editingCollectionName={editingCollectionName}
           />
         )}
 

@@ -391,6 +391,40 @@ fn save_environments(app: AppHandle, data: EnvironmentData) -> Result<(), String
     Ok(())
 }
 
+/// Load collections from the app data directory.
+#[tauri::command]
+fn load_collections(app: AppHandle) -> Result<serde_json::Value, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let file_path = data_dir.join("collections.json");
+
+    if !file_path.exists() {
+        return Ok(serde_json::Value::Null);
+    }
+
+    let content =
+        std::fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse: {}", e))
+}
+
+/// Save collections to the app data directory.
+#[tauri::command]
+fn save_collections(app: AppHandle, data: serde_json::Value) -> Result<(), String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|e| format!("Failed to create data dir: {}", e))?;
+    let file_path = data_dir.join("collections.json");
+    let content =
+        serde_json::to_string_pretty(&data).map_err(|e| format!("Failed to serialize: {}", e))?;
+    std::fs::write(&file_path, content).map_err(|e| format!("Failed to write file: {}", e))?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -404,6 +438,8 @@ pub fn run() {
             clear_logs,
             load_environments,
             save_environments,
+            load_collections,
+            save_collections,
         ])
         .setup(|app| {
             let _ = tauri::WebviewWindowBuilder::new(

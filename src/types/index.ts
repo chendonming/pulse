@@ -28,6 +28,8 @@ export interface Collection {
   id: string;
   name: string;
   requests: RequestItem[];
+  authType: AuthType;
+  bearerToken: string;
 }
 
 export interface RequestItem {
@@ -60,7 +62,7 @@ export type HttpMethod =
   | "HEAD"
   | "OPTIONS";
 
-export type AuthType = "none" | "bearer";
+export type AuthType = "none" | "bearer" | "inherit";
 
 export interface AuthConfig {
   type: AuthType;
@@ -101,4 +103,8 @@ export interface Environment {
 export interface EnvironmentData {
   environments: Environment[];
   active_id: string | null;
+}
+
+export interface CollectionData {
+  collections: Collection[];
 }

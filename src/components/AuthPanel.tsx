@@ -5,10 +5,12 @@ interface AuthPanelProps {
   onAuthTypeChange: (t: AuthType) => void;
   bearerToken: string;
   onBearerTokenChange: (t: string) => void;
+  editingCollectionName: string | null;
 }
 
 const AUTH_OPTIONS: { value: AuthType; label: string }[] = [
   { value: "none", label: "No Auth" },
+  { value: "inherit", label: "Inherit from collection" },
   { value: "bearer", label: "Bearer Token" },
 ];
 
@@ -17,6 +19,7 @@ export default function AuthPanel({
   onAuthTypeChange,
   bearerToken,
   onBearerTokenChange,
+  editingCollectionName,
 }: AuthPanelProps) {
   return (
     <div className="p-3 space-y-3">
@@ -37,6 +40,24 @@ export default function AuthPanel({
           ))}
         </select>
       </div>
+
+      {/* Inherit info */}
+      {authType === "inherit" && (
+        <div className="pl-[5.5rem]">
+          {editingCollectionName ? (
+            <p className="text-[11px] text-pulse-text-muted">
+              Using auth from{" "}
+              <span className="text-pulse-accent font-medium">
+                {editingCollectionName}
+              </span>
+            </p>
+          ) : (
+            <p className="text-[11px] text-pulse-amber">
+              This request is not saved in a collection. Inherit will fall back to No Auth.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Bearer Token Input */}
       {authType === "bearer" && (

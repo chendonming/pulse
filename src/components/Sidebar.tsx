@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type {
   Collection,
   HistoryItem,
@@ -5,6 +6,7 @@ import type {
   Environment,
   EnvironmentVariable,
   RequestItem,
+  AuthType,
 } from "../types";
 import EnvironmentPanel from "./EnvironmentPanel";
 
@@ -20,6 +22,7 @@ interface SidebarProps {
   onDeleteRequest: (collectionId: string, requestId: string) => void;
   onRenameRequest: (collectionId: string, requestId: string) => void;
   onAddCollection: () => void;
+  onUpdateCollectionAuth: (collectionId: string, authType: AuthType, bearerToken: string) => void;
   /* ── Environment props ── */
   environments: Environment[];
   activeEnvironmentId: string | null;
@@ -68,6 +71,7 @@ export default function Sidebar({
   onDeleteRequest,
   onRenameRequest,
   onAddCollection,
+  onUpdateCollectionAuth,
   environments,
   activeEnvironmentId,
   onAddEnvironment,
@@ -78,6 +82,7 @@ export default function Sidebar({
   onUpdateVariable,
   onRemoveVariable,
 }: SidebarProps) {
+  const [expandedAuthCol, setExpandedAuthCol] = useState<string | null>(null);
   return (
     <aside className="w-60 flex flex-col border-r border-pulse-border bg-pulse-surface shrink-0">
       {/* Header */}
@@ -172,6 +177,57 @@ export default function Sidebar({
                     </svg>
                   </button>
                 </div>
+
+                {/* Collection-level Auth */}
+                <button
+                  onClick={() =>
+                    setExpandedAuthCol(expandedAuthCol === col.id ? null : col.id)
+                  }
+                  className="w-full flex items-center gap-2 px-3 py-1 text-[11px] text-pulse-text-muted hover:text-pulse-text-secondary hover:bg-pulse-hover transition-colors group"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  <span className="flex-1 text-left">Auth</span>
+                  {col.authType === "bearer" && (
+                    <span className="text-[10px] px-1 py-0.5 rounded bg-pulse-accent/10 text-pulse-accent">
+                      Bearer
+                    </span>
+                  )}
+                  <svg
+                    className={`w-3 h-3 transition-transform ${expandedAuthCol === col.id ? "rotate-90" : ""}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+
+                {expandedAuthCol === col.id && (
+                  <div className="px-3 py-1.5 space-y-1.5 bg-pulse-deepest/40">
+                    <select
+                      value={col.authType}
+                      onChange={(e) =>
+                        onUpdateCollectionAuth(col.id, e.target.value as AuthType, col.bearerToken)
+                      }
+                      className="w-full bg-pulse-deepest border border-pulse-border rounded px-2 py-1 text-xs font-mono text-pulse-text-primary cursor-pointer transition-colors"
+                    >
+                      <option value="none">No Auth</option>
+                      <option value="bearer">Bearer Token</option>
+                    </select>
+                    {col.authType === "bearer" && (
+                      <input
+                        type="text"
+                        value={col.bearerToken}
+                        onChange={(e) =>
+                          onUpdateCollectionAuth(col.id, col.authType, e.target.value)
+                        }
+                        placeholder="Enter bearer token..."
+                        className="w-full bg-pulse-deepest border border-pulse-border rounded px-2 py-1 text-xs font-mono text-pulse-text-primary placeholder-pulse-text-muted/50 transition-colors"
+                      />
+                    )}
+                  </div>
+                )}
+
                 {col.requests.map((req) => (
                   <button
                     key={req.id}

@@ -20,6 +20,7 @@ export default function App() {
         onDeleteRequest={state.deleteCollectionRequest}
         onRenameRequest={state.renameCollectionRequest}
         onAddCollection={state.addCollection}
+        onUpdateCollectionAuth={state.updateCollectionAuth}
         /* ── Environment props ── */
         environments={state.environments}
         activeEnvironmentId={state.activeEnvironmentId}
@@ -52,6 +53,7 @@ export default function App() {
           onSend={state.sendRequest}
           onSave={state.saveCurrentRequest}
           editingRequest={state.editingRequest}
+          editingCollectionName={state.editingCollectionName}
           authType={state.authType}
           onAuthTypeChange={state.setAuthType}
           bearerToken={state.bearerToken}
