@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import type { HeaderInput, RequestTab, HttpMethod, AuthType } from "../types";
 import AuthPanel from "./AuthPanel";
 
@@ -19,8 +19,6 @@ interface RequestPanelProps {
   onBodyChange: (b: string) => void;
   contentType: string;
   onContentTypeChange: (ct: string) => void;
-  requestTab: RequestTab;
-  onRequestTabChange: (t: RequestTab) => void;
   isLoading: boolean;
   onSend: () => void;
   onSave: () => void;
@@ -89,8 +87,6 @@ export default function RequestPanel({
   onBodyChange,
   contentType,
   onContentTypeChange,
-  requestTab,
-  onRequestTabChange,
   isLoading,
   onSend,
   onSave,
@@ -106,6 +102,9 @@ export default function RequestPanel({
   onRemoveParam,
 }: RequestPanelProps) {
   const urlRef = useRef<HTMLInputElement>(null);
+
+  // 请求面板 Tab 状态（局部状态，避免切换 Tab 时触发 App 级重渲染）
+  const [requestTab, setRequestTab] = useState<RequestTab>("headers");
 
   // 注册全局键盘快捷键：Ctrl+Enter 发送请求
   useEffect(() => {
@@ -252,7 +251,7 @@ export default function RequestPanel({
       {/* 配置 Tab：Auth / Params / Headers / Body */}
       <div className="flex items-center gap-1 px-3">
         <button
-          onClick={() => onRequestTabChange("auth")}
+          onClick={() => setRequestTab("auth")}
           className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
             requestTab === "auth"
               ? "text-pulse-accent border-pulse-accent"
@@ -272,7 +271,7 @@ export default function RequestPanel({
           )}
         </button>
         <button
-          onClick={() => onRequestTabChange("params")}
+          onClick={() => setRequestTab("params")}
           className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
             requestTab === "params"
               ? "text-pulse-accent border-pulse-accent"
@@ -287,7 +286,7 @@ export default function RequestPanel({
           )}
         </button>
         <button
-          onClick={() => onRequestTabChange("headers")}
+          onClick={() => setRequestTab("headers")}
           className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
             requestTab === "headers"
               ? "text-pulse-accent border-pulse-accent"
@@ -302,7 +301,7 @@ export default function RequestPanel({
           )}
         </button>
         <button
-          onClick={() => onRequestTabChange("body")}
+          onClick={() => setRequestTab("body")}
           className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
             requestTab === "body"
               ? "text-pulse-accent border-pulse-accent"

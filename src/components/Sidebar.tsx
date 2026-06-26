@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, memo } from "react";
 import type {
   Collection,
   HistoryItem,
@@ -320,7 +320,7 @@ interface SidebarProps {
 }
 
 // ============================================================
-// 侧边栏主组件
+// 侧边栏主组件（使用 React.memo 避免无关状态更新导致的重渲染）
 //
 // 三个 Tab：
 // 1. Collections（集合 + 请求，带 DnD 拖拽排序）
@@ -328,7 +328,7 @@ interface SidebarProps {
 // 3. Envs（环境变量管理——委托给 EnvironmentPanel）
 // ============================================================
 
-export default function Sidebar({
+export default memo(function Sidebar({
   collections,
   history,
   activeTab,
@@ -777,4 +777,4 @@ export default function Sidebar({
       </div>
     </aside>
   );
-}
+})

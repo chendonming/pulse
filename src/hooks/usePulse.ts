@@ -2,7 +2,6 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   HttpMethod,
-  RequestTab,
   SidebarTab,
   HeaderInput,
   ResponseData,
@@ -83,7 +82,7 @@ export function usePulse() {
   const [rawParams, setRawParams] = useState<HeaderInput[]>([
     { key: "", value: "", enabled: true },
   ]);
-  const [requestTab, setRequestTab] = useState<RequestTab>("headers");
+  // requestTab 已迁移到 RequestPanel 局部状态
 
   // ── 响应状态 ──
   const [response, setResponse] = useState<ResponseData | null>(null);
@@ -92,6 +91,9 @@ export function usePulse() {
 
   // 响应面板 Tab（Body / Headers）
   const [responseTab, setResponseTab] = useState<"body" | "headers">("body");
+
+  // 请求面板 Tab 状态已移至 RequestPanel 组件内部，不再由全局状态管理
+  // 避免切换 Tab 时触发 App 级重渲染导致 Sidebar 和 ResponsePanel 不必要的重渲染
 
   // ── 持久化数据 ──
   const [collections, setCollections] = useState<Collection[]>(() => [
@@ -805,8 +807,7 @@ export function usePulse() {
     addParam,
     updateParam,
     removeParam,
-    requestTab,
-    setRequestTab,
+    // requestTab 和 setRequestTab 已迁移至 RequestPanel 局部状态
     response,
     isLoading,
     error,

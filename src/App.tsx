@@ -64,8 +64,6 @@ export default function App() {
           onBodyChange={state.setBody}
           contentType={state.contentType}
           onContentTypeChange={state.setContentType}
-          requestTab={state.requestTab}
-          onRequestTabChange={state.setRequestTab}
           isLoading={state.isLoading}
           onSend={state.sendRequest}
           onSave={state.saveCurrentRequest}

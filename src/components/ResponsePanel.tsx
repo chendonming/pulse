@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { ResponseData } from "../types";
 import WaterfallChart from "./WaterfallChart";
 import JsonViewer from "./JsonViewer";
@@ -35,7 +36,7 @@ function getStatusBarColor(status: number): string {
  * 3. 空（Empty）→ "Ready to send a request" 引导提示
  * 4. 有响应 → 状态栏 + 瀑布图 + Body/Headers 双 Tab
  */
-export default function ResponsePanel({
+export default memo(function ResponsePanel({
   response,
   isLoading,
   error,
@@ -211,4 +212,4 @@ export default function ResponsePanel({
       </div>
     </div>
   );
-}
+})
