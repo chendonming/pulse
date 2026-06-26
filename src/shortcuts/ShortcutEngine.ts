@@ -64,6 +64,7 @@ export class ShortcutEngine {
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
   private listening = false;
   private chordListeners = new Set<(state: ChordState) => void>();
+  private commandListeners = new Set<(commandId: string) => void>();
 
   readonly chordTimeout = 1000;
 
@@ -226,6 +227,12 @@ export class ShortcutEngine {
     return () => this.chordListeners.delete(wrapped);
   }
 
+  /** 订阅快捷键命令执行事件（用于 UI 闪烁反馈等） */
+  onCommandFired(listener: (commandId: string) => void): () => void {
+    this.commandListeners.add(listener);
+    return () => this.commandListeners.delete(listener);
+  }
+
   // ── 内部方法 ──
 
   private rebuildBindingIndex(): void {
@@ -308,6 +315,7 @@ export class ShortcutEngine {
             if (scope !== "dialog" && cmd.scope !== scope && cmd.scope !== "global") continue;
             e.preventDefault();
             cmd.handler();
+            this.notifyCommandFired(cmd.id);
             return;
           }
         }
@@ -335,6 +343,7 @@ export class ShortcutEngine {
     if (matched) {
       e.preventDefault();
       matched.handler();
+      this.notifyCommandFired(matched.id);
     }
   }
 
@@ -342,6 +351,13 @@ export class ShortcutEngine {
     const state = this.getChordState();
     for (const listener of this.chordListeners) {
       listener(state!);
+    }
+  }
+
+  /** 通知所有订阅者：某快捷键命令已执行 */
+  private notifyCommandFired(commandId: string): void {
+    for (const listener of this.commandListeners) {
+      listener(commandId);
     }
   }
 }

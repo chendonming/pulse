@@ -45,30 +45,35 @@ export default memo(function ResponsePanel({
 }: ResponsePanelProps) {
   if (isLoading) {
     return (
-      <div className="h-full flex items-center justify-center bg-pulse-deepest">
-        <div className="text-center">
-          <svg
-            className="animate-spin h-8 w-8 text-pulse-accent mx-auto mb-3"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
+      <div className="h-full flex flex-col bg-pulse-deepest animate-fade-in">
+        {/* 状态栏骨架 */}
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-pulse-border bg-pulse-surface">
+          <div className="h-5 w-28 rounded bg-pulse-elevated animate-pulse-soft" />
+          <div className="h-4 w-16 rounded bg-pulse-elevated animate-pulse-soft" />
+          <div className="h-4 w-12 rounded bg-pulse-elevated animate-pulse-soft" />
+        </div>
+        {/* 瀑布图骨架 */}
+        <div className="px-4 py-2.5 border-b border-pulse-border space-y-2">
+          <div className="h-3 w-28 rounded bg-pulse-elevated animate-pulse-soft" />
+          {[90, 65, 80, 45, 30].map((w, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="h-3 w-12 rounded bg-pulse-elevated animate-pulse-soft" />
+              <div
+                className="h-4 rounded bg-pulse-elevated animate-pulse-soft"
+                style={{ width: `${w}%`, animationDelay: `${i * 80}ms` }}
+              />
+            </div>
+          ))}
+        </div>
+        {/* Body 骨架 */}
+        <div className="flex-1 p-4 space-y-2">
+          {[85, 92, 78, 60, 95, 70, 88].map((w, i) => (
+            <div
+              key={i}
+              className="h-3 rounded bg-pulse-elevated animate-pulse-soft"
+              style={{ width: `${w}%`, animationDelay: `${(i + 5) * 80}ms` }}
             />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-            />
-          </svg>
-          <p className="text-sm text-pulse-text-muted font-mono animate-pulse-soft">
-            Sending request...
-          </p>
+          ))}
         </div>
       </div>
     );
@@ -164,20 +169,20 @@ export default memo(function ResponsePanel({
         <div className="flex items-center gap-1 px-3 border-b border-pulse-border shrink-0">
           <button
             onClick={() => onResponseTabChange("body")}
-            className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
+            className={`pb-2 pt-1 px-3 text-xs font-medium transition-all duration-150 border-b-2 ${
               responseTab === "body"
-                ? "text-pulse-accent border-pulse-accent"
-                : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border"
+                ? "text-pulse-accent border-pulse-accent bg-pulse-accent/[0.04]"
+                : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border hover:bg-pulse-hover/50"
             }`}
           >
             Body
           </button>
           <button
             onClick={() => onResponseTabChange("headers")}
-            className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
+            className={`pb-2 pt-1 px-3 text-xs font-medium transition-all duration-150 border-b-2 ${
               responseTab === "headers"
-                ? "text-pulse-accent border-pulse-accent"
-                : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border"
+                ? "text-pulse-accent border-pulse-accent bg-pulse-accent/[0.04]"
+                : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border hover:bg-pulse-hover/50"
             }`}
           >
             Headers

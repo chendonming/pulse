@@ -466,11 +466,16 @@ export default memo(function Sidebar({
         <button
           onClick={onNewRequest}
           title="New Request"
-          className="w-7 h-7 flex items-center justify-center rounded-md text-pulse-text-muted hover:text-pulse-accent hover:bg-pulse-hover transition-colors"
+          className="w-7 h-7 flex items-center justify-center rounded-md text-pulse-text-muted hover:text-pulse-accent hover:bg-pulse-hover transition-colors active:scale-95 relative group"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
+          {/* 快捷键提示 tooltip */}
+          <span className="absolute -bottom-6 right-0 hidden group-hover:flex items-center gap-1 px-1.5 py-0.5 bg-pulse-elevated border border-pulse-border rounded text-[10px] text-pulse-text-muted whitespace-nowrap z-50">
+            New
+            <kbd className="font-mono text-pulse-text-muted/60">Ctrl+N</kbd>
+          </span>
         </button>
       </div>
 

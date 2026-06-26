@@ -15,6 +15,7 @@ import type {
   EnvironmentData,
   CollectionData,
 } from "../types";
+import type { ToastItem } from "../components/Toast";
 
 // ============================================================
 // 工具函数：URL 查询字符串解析
@@ -147,6 +148,160 @@ export function usePulse() {
     collectionId: string;
     requestId: string;
   } | null>(null);
+
+  // ── Toast 通知状态 ──
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  /** 添加 Toast 通知 */
+  const addToast = useCallback((toast: Omit<ToastItem, 'id'>) => {
+    const id = crypto.randomUUID();
+    setToasts((prev) => [...prev, { ...toast, id }]);
+    if (toast.duration !== 0) {
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, toast.duration ?? 3000);
+    }
+    return id;
+  }, []);
+
+  /** 手动关闭 Toast */
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // ── 脏状态跟踪（未保存更改检测） ──
+  const [isDirty, setIsDirty] = useState(false);
+  const savedSnapshot = useRef<{
+    method: string;
+    url: string;
+    headers: HeaderInput[];
+    body: string;
+    contentType: string;
+    authType: string;
+    bearerToken: string;
+    rawParams: HeaderInput[];
+  } | null>(null);
+
+  /** 更新已保存状态快照（在加载/保存请求后调用） */
+  const updateSnapshot = useCallback(() => {
+    savedSnapshot.current = {
+      method,
+      url: url.trim(),
+      headers,
+      body,
+      contentType,
+      authType,
+      bearerToken,
+      rawParams,
+    };
+    setIsDirty(false);
+  }, [method, url, headers, body, contentType, authType, bearerToken, rawParams]);
+
+  /** 脏状态比较：当请求参数变化时自动更新 isDirty */
+  useEffect(() => {
+    if (!savedSnapshot.current) { setIsDirty(false); return; }
+    const s = savedSnapshot.current;
+    const changed =
+      method !== s.method ||
+      url.trim() !== s.url ||
+      JSON.stringify(headers) !== JSON.stringify(s.headers) ||
+      body !== s.body ||
+      contentType !== s.contentType ||
+      authType !== s.authType ||
+      bearerToken !== s.bearerToken ||
+      JSON.stringify(rawParams) !== JSON.stringify(s.rawParams);
+    setIsDirty(changed);
+  }, [method, url, headers, body, contentType, authType, bearerToken, rawParams]);
+
+  // ── 删除确认对话框状态 ──
+  const [confirmDialog, setConfirmDialog] = useState<{
+    type: "deleteRequest" | "deleteCollection";
+    collectionId: string;
+    requestId?: string;
+    requestName?: string;
+    collectionName?: string;
+  } | null>(null);
+
+  /** 撤销删除栈（最多保存 30 秒内的操作） */
+  const undoStack = useRef<Array<{
+    type: "deleteRequest";
+    collectionId: string;
+    requestIndex: number;
+    request: RequestItem;
+    timestamp: number;
+  }>>([]);
+
+  /** 确认危险操作 */
+  const confirmDestructive = useCallback(() => {
+    if (!confirmDialog) return;
+    if (confirmDialog.type === "deleteRequest") {
+      const { collectionId, requestId, requestName } = confirmDialog;
+      // 执行删除前捕获索引
+      const col = collections.find((c) => c.id === collectionId);
+      const reqIndex = col?.requests.findIndex((r) => r.id === requestId) ?? -1;
+      const deletedReq = reqIndex >= 0 ? col!.requests[reqIndex] : null;
+
+      setCollections((prev) =>
+        prev.map((c) =>
+          c.id === collectionId
+            ? { ...c, requests: c.requests.filter((r) => r.id !== requestId) }
+            : c,
+        ),
+      );
+      // 如果删除的请求正在编辑，清除编辑状态
+      if (
+        editingRequest?.collectionId === collectionId &&
+        editingRequest?.requestId === requestId
+      ) {
+        setEditingRequest(null);
+      }
+
+      // 推入撤销栈
+      if (deletedReq && reqIndex >= 0) {
+        undoStack.current.push({
+          type: "deleteRequest",
+          collectionId,
+          requestIndex: reqIndex,
+          request: deletedReq,
+          timestamp: Date.now(),
+        });
+        // 自动清理超过 30 秒的旧记录
+        const now = Date.now();
+        undoStack.current = undoStack.current.filter((e) => now - e.timestamp < 30000);
+      }
+
+      // 弹出含撤销按钮的 Toast
+      addToast({
+        type: "info",
+        message: `Deleted "${requestName ?? deletedReq?.name ?? "Untitled"}"`,
+        duration: 5000,
+        action: { label: "Undo", onClick: undoLastDelete },
+      });
+    }
+    setConfirmDialog(null);
+  }, [confirmDialog, collections, editingRequest, addToast]);
+
+  /** 取消危险操作 */
+  const cancelDestructive = useCallback(() => {
+    setConfirmDialog(null);
+  }, []);
+
+  /** 撤销上一次删除 */
+  const undoLastDelete = useCallback(() => {
+    const entry = undoStack.current.pop();
+    if (!entry) return;
+    if (entry.type === "deleteRequest") {
+      setCollections((prev) =>
+        prev.map((c) => {
+          if (c.id !== entry.collectionId) return c;
+          const newRequests = [...c.requests];
+          newRequests.splice(entry.requestIndex, 0, entry.request);
+          return { ...c, requests: newRequests };
+        }),
+      );
+      addToast({ type: "success", message: `"${entry.request.name}" restored` });
+    }
+  }, [addToast]);
 
   // ── 加载与持久化：环境变量 ──
 
@@ -419,9 +574,20 @@ export function usePulse() {
         item.params?.length ? item.params : [{ key: "", value: "", enabled: true }],
       );
       setEditingRequest({ collectionId, requestId: item.id });
+      // 加载请求时重置脏状态（下一帧 snapshot 由 editingRequest 触发 useEffect 完成）
     },
     [],
   );
+
+  // 编辑请求变化时自动更新已保存快照
+  const prevEditingRef = useRef(editingRequest);
+  useEffect(() => {
+    if (editingRequest && editingRequest !== prevEditingRef.current) {
+      // 延迟一帧确保所有 setState 已生效
+      requestAnimationFrame(() => { updateSnapshot(); });
+    }
+    prevEditingRef.current = editingRequest;
+  }, [editingRequest, updateSnapshot]);
 
   // 清除当前响应和错误
   const clearResponse = useCallback(() => {
@@ -494,6 +660,9 @@ export function usePulse() {
             : c,
         ),
       );
+      // 更新成功：重置脏状态并弹出通知
+      requestAnimationFrame(() => { updateSnapshot(); });
+      addToast({ type: "success", message: "Request updated" });
     } else {
       // 新建请求：弹出内联命名对话框
       const defaultName = url.trim()
@@ -513,6 +682,8 @@ export function usePulse() {
     rawParams,
     editingRequest,
     collections,
+    updateSnapshot,
+    addToast,
   ]);
 
   /**
@@ -562,7 +733,11 @@ export function usePulse() {
     }
     setEditingRequest({ collectionId: colId, requestId: newReq.id });
     setSaveDialogVisible(false);
-  }, [saveDialogName, method, url, headers, body, contentType, authType, bearerToken, rawParams, collections]);
+    // 保存成功后重置脏状态并弹出通知
+    requestAnimationFrame(() => { updateSnapshot(); });
+    const colName = collections.find((c) => c.id === colId)?.name ?? "My Collection";
+    addToast({ type: "success", message: `Saved to ${colName}` });
+  }, [saveDialogName, method, url, headers, body, contentType, authType, bearerToken, rawParams, collections, addToast, updateSnapshot]);
 
   const cancelSave = useCallback(() => {
     setSaveDialogVisible(false);
@@ -571,25 +746,18 @@ export function usePulse() {
   /** 删除集合中的某个请求 */
   const deleteCollectionRequest = useCallback(
     (collectionId: string, requestId: string) => {
-      setCollections((prev) =>
-        prev.map((c) =>
-          c.id === collectionId
-            ? {
-                ...c,
-                requests: c.requests.filter((r) => r.id !== requestId),
-              }
-            : c,
-        ),
-      );
-      // 如果删除的请求正在编辑，清除编辑状态
-      if (
-        editingRequest?.collectionId === collectionId &&
-        editingRequest?.requestId === requestId
-      ) {
-        setEditingRequest(null);
-      }
+      // 弹出确认对话框（不再直接删除）
+      const col = collections.find((c) => c.id === collectionId);
+      const req = col?.requests.find((r) => r.id === requestId);
+      if (!req) return;
+      setConfirmDialog({
+        type: "deleteRequest",
+        collectionId,
+        requestId,
+        requestName: req.name,
+      });
     },
-    [editingRequest],
+    [collections],
   );
 
   /** 重命名集合中的请求（弹出对话框） */
@@ -705,6 +873,13 @@ export function usePulse() {
   // 获取当前编辑请求所属的集合名称（用于 AuthPanel 显示继承来源）
   const editingCollectionName = editingRequest
     ? collections.find((c) => c.id === editingRequest.collectionId)?.name ?? null
+    : null;
+
+  // 获取当前编辑请求的名称（用于面包屑导航显示）
+  const editingRequestName = editingRequest
+    ? collections
+        .find((c) => c.id === editingRequest.collectionId)
+        ?.requests.find((r) => r.id === editingRequest.requestId)?.name ?? null
     : null;
 
   // ============================================================
@@ -838,7 +1013,19 @@ export function usePulse() {
     moveRequest,
     moveCollection,
     editingCollectionName,
+    editingRequestName,
     editingRequest,
+    /* ── Toast 通知 ── */
+    toasts,
+    addToast,
+    dismissToast,
+    /* ── 脏状态跟踪 ── */
+    isDirty,
+    /* ── 删除确认对话框 ── */
+    confirmDialog,
+    confirmDestructive,
+    cancelDestructive,
+    undoLastDelete,
     /* ── 保存命名对话框 ── */
     saveDialogVisible,
     saveDialogName,

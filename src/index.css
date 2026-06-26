@@ -102,6 +102,26 @@
   .method-badge {
     @apply badge font-mono font-semibold text-xs;
   }
+
+  /* 骨架屏占位块 */
+  .skeleton {
+    @apply bg-pulse-elevated rounded animate-pulse-soft;
+  }
+
+  /* 聚焦环（无障碍可访问性） */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pulse-accent/60 focus-visible:ring-offset-1 focus-visible:ring-offset-pulse-surface;
+  }
+}
+
+/* 快捷键闪烁反馈动画 */
+@keyframes flash-key {
+  0% { box-shadow: 0 0 0 0 rgba(240, 180, 41, 0.6); }
+  50% { box-shadow: 0 0 0 4px rgba(240, 180, 41, 0.3); }
+  100% { box-shadow: 0 0 0 0 rgba(240, 180, 41, 0); }
+}
+.flash-key {
+  animation: flash-key 0.6s ease-out;
 }
 
 @layer utilities {

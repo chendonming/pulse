@@ -24,6 +24,9 @@ interface RequestPanelProps {
   onSave: () => void;
   editingRequest: { collectionId: string; requestId: string } | null;
   editingCollectionName: string | null;
+  requestName: string | null;
+  isDirty: boolean;
+  onShowCollectionContext: () => void;
   authType: AuthType;
   onAuthTypeChange: (t: AuthType) => void;
   bearerToken: string;
@@ -34,6 +37,8 @@ interface RequestPanelProps {
   onRemoveParam: (i: number) => void;
   requestTab: RequestTab;
   onRequestTabChange: (tab: RequestTab) => void;
+  flashCommand: string | null;
+  shortcutHints: { commandId: string; label: string }[];
 }
 
 /** 支持的 HTTP 方法列表 */
@@ -94,6 +99,9 @@ export default function RequestPanel({
   onSave,
   editingRequest,
   editingCollectionName,
+  requestName,
+  isDirty,
+  onShowCollectionContext,
   authType,
   onAuthTypeChange,
   bearerToken,
@@ -104,6 +112,8 @@ export default function RequestPanel({
   onRemoveParam,
   requestTab,
   onRequestTabChange,
+  flashCommand,
+  shortcutHints,
 }: RequestPanelProps) {
   const urlRef = useRef<HTMLInputElement>(null);
 
@@ -176,13 +186,34 @@ export default function RequestPanel({
           )}
         </div>
 
+        {/* 集合上下文徽标：显示当前请求所属的集合名称 */}
+        {editingCollectionName && (
+          <button
+            onClick={onShowCollectionContext}
+            className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md
+                       bg-pulse-accent/10 text-pulse-accent text-[11px] font-medium
+                       hover:bg-pulse-accent/20 transition-colors"
+            title={`所属集合: ${editingCollectionName}`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+            <span className="max-w-[120px] truncate">{editingCollectionName}</span>
+          </button>
+        )}
+
         {/* 保存到集合按钮 */}
         <button
           onClick={onSave}
           disabled={isLoading}
           title={editingRequest ? "Update request in collection" : "Save to collection"}
-          className="btn-ghost min-w-[70px] justify-center text-xs gap-1"
+          className={`btn-ghost min-w-[70px] justify-center text-xs gap-1 relative active:scale-[0.96] transition-transform duration-75 ${flashCommand === 'saveRequest' ? 'flash-key' : ''}`}
         >
+          {/* 脏状态指示点：当有未保存更改时显示 */}
+          {isDirty && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-pulse-accent
+                           animate-pulse-soft shadow-[0_0_4px_rgba(240,180,41,0.5)]" />
+          )}
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
           </svg>
@@ -193,7 +224,7 @@ export default function RequestPanel({
         <button
           onClick={onSend}
           disabled={isLoading || !url.trim()}
-          className="btn-primary min-w-[80px] justify-center"
+          className={`btn-primary min-w-[80px] justify-center active:scale-[0.96] transition-transform duration-75 ${flashCommand === 'sendRequest' ? 'flash-key' : ''}`}
         >
           {isLoading ? (
             <>
@@ -237,16 +268,47 @@ export default function RequestPanel({
             </>
           )}
         </button>
+        {/* 快捷键提示标签 */}
+        {shortcutHints.find((h) => h.commandId === "sendRequest") && (
+          <kbd className="hidden sm:inline-flex text-[10px] font-mono text-pulse-text-muted/50
+                         px-1.5 py-0.5 rounded border border-pulse-border/30 bg-pulse-deepest/50">
+            {shortcutHints.find((h) => h.commandId === "sendRequest")!.label}
+          </kbd>
+        )}
+      </div>
+
+      {/* 面包屑导航：当前请求的位置路径 */}
+      <div className="flex items-center gap-1 px-3 pb-1 text-[11px] text-pulse-text-muted">
+        <span className="text-pulse-text-muted/60">Requests</span>
+        <svg className="w-2.5 h-2.5 text-pulse-text-muted/40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        {editingCollectionName ? (
+          <>
+            <button
+              onClick={onShowCollectionContext}
+              className="text-pulse-accent hover:underline truncate max-w-[120px]"
+            >
+              {editingCollectionName}
+            </button>
+            <svg className="w-2.5 h-2.5 text-pulse-text-muted/40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </>
+        ) : null}
+        <span className={`truncate max-w-[180px] ${requestName ? 'text-pulse-text-secondary' : 'text-pulse-text-muted italic'}`}>
+          {requestName ?? (url ? "Unsaved Request" : "New Request")}
+        </span>
       </div>
 
       {/* 配置 Tab：Auth / Params / Headers / Body */}
       <div className="flex items-center gap-1 px-3">
         <button
           onClick={() => onRequestTabChange("auth")}
-          className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
+          className={`pb-2 pt-1 px-3 text-xs font-medium transition-all duration-150 border-b-2 ${
             requestTab === "auth"
-              ? "text-pulse-accent border-pulse-accent"
-              : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border"
+              ? "text-pulse-accent border-pulse-accent bg-pulse-accent/[0.04]"
+              : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border hover:bg-pulse-hover/50"
           }`}
         >
           Auth
@@ -263,10 +325,10 @@ export default function RequestPanel({
         </button>
         <button
           onClick={() => onRequestTabChange("params")}
-          className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
+          className={`pb-2 pt-1 px-3 text-xs font-medium transition-all duration-150 border-b-2 ${
             requestTab === "params"
-              ? "text-pulse-accent border-pulse-accent"
-              : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border"
+              ? "text-pulse-accent border-pulse-accent bg-pulse-accent/[0.04]"
+              : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border hover:bg-pulse-hover/50"
           }`}
         >
           Params
@@ -278,10 +340,10 @@ export default function RequestPanel({
         </button>
         <button
           onClick={() => onRequestTabChange("headers")}
-          className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
+          className={`pb-2 pt-1 px-3 text-xs font-medium transition-all duration-150 border-b-2 ${
             requestTab === "headers"
-              ? "text-pulse-accent border-pulse-accent"
-              : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border"
+              ? "text-pulse-accent border-pulse-accent bg-pulse-accent/[0.04]"
+              : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border hover:bg-pulse-hover/50"
           }`}
         >
           Headers
@@ -293,10 +355,10 @@ export default function RequestPanel({
         </button>
         <button
           onClick={() => onRequestTabChange("body")}
-          className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
+          className={`pb-2 pt-1 px-3 text-xs font-medium transition-all duration-150 border-b-2 ${
             requestTab === "body"
-              ? "text-pulse-accent border-pulse-accent"
-              : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border"
+              ? "text-pulse-accent border-pulse-accent bg-pulse-accent/[0.04]"
+              : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border hover:bg-pulse-hover/50"
           }`}
         >
           Body
