@@ -495,6 +495,52 @@ fn save_collections(app: AppHandle, data: serde_json::Value) -> Result<(), Strin
 }
 
 /**
+ * 快捷键绑定数据
+ * 存储用户自定义的快捷键覆盖配置
+ */
+#[derive(Debug, Serialize, Deserialize)]
+pub struct KeybindingData {
+    pub version: i32,
+    pub bindings: HashMap<String, Vec<String>>,
+}
+
+/** 从操作系统应用数据目录加载 keybindings.json */
+#[tauri::command]
+fn load_keybindings(app: AppHandle) -> Result<Option<KeybindingData>, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let file_path = data_dir.join("keybindings.json");
+
+    if !file_path.exists() {
+        return Ok(None);
+    }
+
+    let content =
+        std::fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
+    serde_json::from_str(&content)
+        .map(Some)
+        .map_err(|e| format!("Failed to parse: {}", e))
+}
+
+/** 将快捷键绑定持久化到 keybindings.json */
+#[tauri::command]
+fn save_keybindings(app: AppHandle, data: KeybindingData) -> Result<(), String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|e| format!("Failed to create data dir: {}", e))?;
+    let file_path = data_dir.join("keybindings.json");
+    let content =
+        serde_json::to_string_pretty(&data).map_err(|e| format!("Failed to serialize: {}", e))?;
+    std::fs::write(&file_path, content).map_err(|e| format!("Failed to write file: {}", e))?;
+    Ok(())
+}
+
+/**
  * 应用入口
  *
  * 1. 初始化 LogStore（Mutex 包裹的 Vec，线程共享）
@@ -517,6 +563,8 @@ pub fn run() {
             save_environments,
             load_collections,
             save_collections,
+            load_keybindings,
+            save_keybindings,
         ])
         .setup(|app| {
             // 创建独立的日志查看窗口（标签为 "logs"）

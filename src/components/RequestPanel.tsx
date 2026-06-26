@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef } from "react";
 import type { HeaderInput, RequestTab, HttpMethod, AuthType } from "../types";
 import AuthPanel from "./AuthPanel";
 
@@ -32,6 +32,8 @@ interface RequestPanelProps {
   onAddParam: () => void;
   onUpdateParam: (i: number, f: keyof HeaderInput, v: string | boolean) => void;
   onRemoveParam: (i: number) => void;
+  requestTab: RequestTab;
+  onRequestTabChange: (tab: RequestTab) => void;
 }
 
 /** 支持的 HTTP 方法列表 */
@@ -72,7 +74,7 @@ const CONTENT_TYPES = [
  * - URL 栏（方法选择器 + URL 输入框 + 保存按钮 + 发送按钮）
  * - 四个配置 Tab：Auth / Params / Headers / Body
  *
- * 支持快捷键 Ctrl+Enter（或 Cmd+Enter）快速发送请求
+ * 快捷键 Ctrl+Enter（或 Cmd+Enter）由 ShortcutEngine 统一管理
  */
 export default function RequestPanel({
   method,
@@ -100,22 +102,10 @@ export default function RequestPanel({
   onAddParam,
   onUpdateParam,
   onRemoveParam,
+  requestTab,
+  onRequestTabChange,
 }: RequestPanelProps) {
   const urlRef = useRef<HTMLInputElement>(null);
-
-  // 请求面板 Tab 状态（局部状态，避免切换 Tab 时触发 App 级重渲染）
-  const [requestTab, setRequestTab] = useState<RequestTab>("headers");
-
-  // 注册全局键盘快捷键：Ctrl+Enter 发送请求
-  useEffect(() => {
-    const handle = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        onSend();
-      }
-    };
-    window.addEventListener("keydown", handle);
-    return () => window.removeEventListener("keydown", handle);
-  }, [onSend]);
 
   return (
     <div className="shrink-0 border-b border-pulse-border bg-pulse-surface">
@@ -153,6 +143,7 @@ export default function RequestPanel({
         <div className="flex-1 relative">
           <input
             ref={urlRef}
+            id="request-url-input"
             type="text"
             value={url}
             onChange={(e) => onUrlChange(e.target.value)}
@@ -251,7 +242,7 @@ export default function RequestPanel({
       {/* 配置 Tab：Auth / Params / Headers / Body */}
       <div className="flex items-center gap-1 px-3">
         <button
-          onClick={() => setRequestTab("auth")}
+          onClick={() => onRequestTabChange("auth")}
           className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
             requestTab === "auth"
               ? "text-pulse-accent border-pulse-accent"
@@ -271,7 +262,7 @@ export default function RequestPanel({
           )}
         </button>
         <button
-          onClick={() => setRequestTab("params")}
+          onClick={() => onRequestTabChange("params")}
           className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
             requestTab === "params"
               ? "text-pulse-accent border-pulse-accent"
@@ -286,7 +277,7 @@ export default function RequestPanel({
           )}
         </button>
         <button
-          onClick={() => setRequestTab("headers")}
+          onClick={() => onRequestTabChange("headers")}
           className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
             requestTab === "headers"
               ? "text-pulse-accent border-pulse-accent"
@@ -301,7 +292,7 @@ export default function RequestPanel({
           )}
         </button>
         <button
-          onClick={() => setRequestTab("body")}
+          onClick={() => onRequestTabChange("body")}
           className={`pb-2 pt-1 px-3 text-xs font-medium transition-colors border-b-2 ${
             requestTab === "body"
               ? "text-pulse-accent border-pulse-accent"

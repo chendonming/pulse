@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   HttpMethod,
   SidebarTab,
+  RequestTab,
   HeaderInput,
   ResponseData,
   Collection,
@@ -82,7 +83,8 @@ export function usePulse() {
   const [rawParams, setRawParams] = useState<HeaderInput[]>([
     { key: "", value: "", enabled: true },
   ]);
-  // requestTab 已迁移到 RequestPanel 局部状态
+  // 请求面板 Tab（由 ShortcutEngine 的标签切换快捷键控制，保留在全局便于 App.tsx 注册命令）
+  const [requestTab, setRequestTab] = useState<RequestTab>("headers");
 
   // ── 响应状态 ──
   const [response, setResponse] = useState<ResponseData | null>(null);
@@ -807,7 +809,8 @@ export function usePulse() {
     addParam,
     updateParam,
     removeParam,
-    // requestTab 和 setRequestTab 已迁移至 RequestPanel 局部状态
+    requestTab,
+    setRequestTab,
     response,
     isLoading,
     error,

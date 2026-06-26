@@ -135,3 +135,9 @@ export interface EnvironmentData {
 export interface CollectionData {
   collections: Collection[];
 }
+
+/** 快捷键绑定持久化数据 */
+export interface KeybindingData {
+  version: number;
+  bindings: Record<string, string[]>;
+}
