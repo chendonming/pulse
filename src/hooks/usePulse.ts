@@ -247,18 +247,24 @@ export function usePulse() {
   /** 关闭指定标签页（若为最后一个则自动创建空白标签页） */
   const closeTab = useCallback(
     (tabId: string) => {
+      // 预先创建空白标签页，确保两个 setState 使用同一个 ID
+      const fallbackTab = createBlankTab();
       setTabs((prev) => {
         if (prev.length <= 1) {
-          // 关闭最后一个标签页 → 创建空白标签页替代
-          return [createBlankTab()];
+          // 关闭最后一个标签页 → 使用预先创建的空白标签页替代
+          return [fallbackTab];
         }
         return prev.filter((t) => t.id !== tabId);
       });
       setActiveTabId((prevId) => {
         if (prevId !== tabId) return prevId; // 关闭的不是当前标签页
+        if (tabs.length <= 1) {
+          // 关闭最后一个标签页 → 切换到预先创建的空白标签页
+          return fallbackTab.id;
+        }
         // 切换到左侧相邻标签页，若无则切到右侧
-        const idx = tabs.findIndex((t) => t.id === tabId);
         const remaining = tabs.filter((t) => t.id !== tabId);
+        const idx = tabs.findIndex((t) => t.id === tabId);
         const target = Math.max(0, Math.min(idx, remaining.length - 1));
         return remaining[target]?.id ?? tabId;
       });
@@ -724,14 +730,8 @@ export function usePulse() {
       });
     } else if (confirmDialog.type === "deleteCollection") {
       const { collectionId, collectionName } = confirmDialog;
-      const colIndex = collections.findIndex((c) => c.id === collectionId);
-      const deletedCol = colIndex >= 0 ? collections[colIndex] : null;
 
-      if (!deletedCol) {
-        setConfirmDialog(null);
-        return;
-      }
-
+      // 删除集合（使用函数式更新，不受闭包陈旧性影响）
       setCollections((prev) => prev.filter((c) => c.id !== collectionId));
 
       // 清除所有标签页中对该集合的编辑状态
@@ -745,8 +745,15 @@ export function usePulse() {
 
       undoStack.current.push({
         type: "deleteCollection",
-        collectionIndex: colIndex,
-        collection: deletedCol,
+        collectionIndex: collections.findIndex((c) => c.id === collectionId),
+        collection: collections.find((c) => c.id === collectionId) || {
+          id: collectionId,
+          name: collectionName ?? "Unknown",
+          base_url: "",
+          authType: "none" as const,
+          bearerToken: "",
+          requests: [],
+        },
         timestamp: Date.now(),
       });
       const now = Date.now();
@@ -754,7 +761,7 @@ export function usePulse() {
 
       addToast({
         type: "info",
-        message: `Deleted collection "${collectionName ?? deletedCol.name}"`,
+        message: `Deleted collection "${collectionName ?? "Unknown"}"`,
         duration: 5000,
         action: { label: "Undo", onClick: undoLastDelete },
       });
