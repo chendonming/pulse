@@ -112,6 +112,8 @@ function SortableColHeader({
   name,
   count,
   colorClass,
+  collapsed,
+  onToggle,
   onDelete,
 }: {
   id: string;
@@ -119,6 +121,10 @@ function SortableColHeader({
   count: number;
   /** 集合色标指示点的 Tailwind 背景色 class（循环调色板） */
   colorClass: string;
+  /** 是否处于折叠状态（隐藏请求列表） */
+  collapsed: boolean;
+  /** 切换折叠/展开 */
+  onToggle: () => void;
   /** 删除集合 */
   onDelete: () => void;
 }) {
@@ -146,6 +152,20 @@ function SortableColHeader({
       {...attributes}
       className="group flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold text-pulse-text-secondary uppercase tracking-wider select-none"
     >
+      {/* 折叠/展开按钮（请求过多时收缩集合，减少视觉干扰） */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        className="shrink-0 w-4 h-4 flex items-center justify-center rounded text-pulse-text-muted/30 hover:text-pulse-text-muted/70 hover:bg-pulse-hover transition-all"
+      >
+        <svg
+          className={`w-3 h-3 transition-transform ${!collapsed ? "rotate-90" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
       {/* 集合色标指示点 —— 循环调色板，快速区分不同集合 */}
       <span className={`w-2 h-2 rounded-full shrink-0 ${colorClass}`} />
       {/* 六点手柄拖拽图标 */}
@@ -425,6 +445,29 @@ export default memo(function Sidebar({
   const [expandedAuthCol, setExpandedAuthCol] = useState<string | null>(null);
   const [expandedVarsCol, setExpandedVarsCol] = useState<string | null>(null);
 
+  // ── Collection 折叠/展开状态（持久化到 localStorage） ──
+  const [collapsedCols, setCollapsedCols] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("pulse-collapsed-cols");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  /** 切换指定 Collection 的折叠/展开状态 */
+  const toggleCollapseCol = useCallback((colId: string) => {
+    setCollapsedCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(colId)) {
+        next.delete(colId);
+      } else {
+        next.add(colId);
+      }
+      localStorage.setItem("pulse-collapsed-cols", JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
   // ── DnD 状态 ──
   const [activeDndId, setActiveDndId] = useState<string | null>(null);
   const activeInfo = activeDndId ? parse(activeDndId) : null;
@@ -437,18 +480,21 @@ export default memo(function Sidebar({
     }),
   );
 
-  // ── 将集合和请求展开为扁平列表（用于单个 SortableContext） ──
+  // ── 将集合和请求展开为扁平列表（已折叠集合的请求项被过滤） ──
 
   const { flatItems, allIds } = useMemo(() => {
     const items: { dndId: string; col: Collection; req?: RequestItem }[] = [];
     for (const col of collections) {
       items.push({ dndId: cid(col.id), col });
-      for (const req of col.requests) {
-        items.push({ dndId: rid(col.id, req.id), col, req });
+      // 已折叠的集合不渲染其请求项
+      if (!collapsedCols.has(col.id)) {
+        for (const req of col.requests) {
+          items.push({ dndId: rid(col.id, req.id), col, req });
+        }
       }
     }
     return { flatItems: items, allIds: items.map((i) => i.dndId) };
-  }, [collections]);
+  }, [collections, collapsedCols]);
 
   // ── 拖拽事件处理 ──
 
@@ -507,7 +553,7 @@ export default memo(function Sidebar({
   // ── 渲染 ──
 
   return (
-    <aside className="flex flex-col border-r border-pulse-border bg-pulse-surface min-w-0">
+    <aside className="h-full flex flex-col border-r border-pulse-border bg-pulse-surface min-w-0">
       {/* 头部 Logo */}
       <div className="flex items-center justify-between px-4 h-12 border-b border-pulse-border">
         <div className="flex items-center gap-2.5">
@@ -655,6 +701,8 @@ export default memo(function Sidebar({
                               name={col.name}
                               count={col.requests.length}
                               colorClass={colorClass}
+                              collapsed={collapsedCols.has(col.id)}
+                              onToggle={() => toggleCollapseCol(col.id)}
                               onDelete={() => onDeleteCollection(col.id)}
                             />
 
