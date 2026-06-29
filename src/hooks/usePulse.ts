@@ -61,6 +61,38 @@ function buildUrlWithParams(base: string, params: HeaderInput[]): string {
   return `${base}?${qs}`;
 }
 
+/**
+ * 将 bodyParams 序列化为 URL 编码的字符串
+ * 用于 application/x-www-form-urlencoded 类型的请求体
+ */
+function serializeBodyParams(params: HeaderInput[]): string {
+  const active = params.filter((p) => p.key.trim() && p.enabled);
+  if (active.length === 0) return "";
+  return active
+    .map((p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`)
+    .join("&");
+}
+
+/**
+ * 将 URL 编码的请求体字符串解析为 bodyParams 列表
+ * 从已保存的 form-urlencoded body 还原为键值对
+ */
+function parseBodyParams(body: string): HeaderInput[] {
+  if (!body) return [{ key: "", value: "", enabled: true }];
+  const pairs = body.split("&").filter(Boolean);
+  if (pairs.length === 0) return [{ key: "", value: "", enabled: true }];
+  return pairs.map((pair) => {
+    const eq = pair.indexOf("=");
+    if (eq === -1)
+      return { key: decodeURIComponent(pair), value: "", enabled: true };
+    return {
+      key: decodeURIComponent(pair.slice(0, eq)),
+      value: decodeURIComponent(pair.slice(eq + 1)),
+      enabled: true,
+    };
+  });
+}
+
 // ============================================================
 // 应用状态管理 Hook
 //
@@ -76,6 +108,10 @@ export function usePulse() {
     { key: "", value: "", enabled: true },
   ]);
   const [body, setBody] = useState("");
+  // 请求体键值对（用于 application/x-www-form-urlencoded 类型）
+  const [bodyParams, setBodyParams] = useState<HeaderInput[]>([
+    { key: "", value: "", enabled: true },
+  ]);
   const [contentType, setContentType] = useState("application/json");
   // 请求级认证
   const [authType, setAuthType] = useState<AuthType>("none");
@@ -176,6 +212,7 @@ export function usePulse() {
     url: string;
     headers: HeaderInput[];
     body: string;
+    bodyParams: HeaderInput[];
     contentType: string;
     authType: string;
     bearerToken: string;
@@ -189,13 +226,14 @@ export function usePulse() {
       url: url.trim(),
       headers,
       body,
+      bodyParams,
       contentType,
       authType,
       bearerToken,
       rawParams,
     };
     setIsDirty(false);
-  }, [method, url, headers, body, contentType, authType, bearerToken, rawParams]);
+  }, [method, url, headers, body, bodyParams, contentType, authType, bearerToken, rawParams]);
 
   /** 脏状态比较：当请求参数变化时自动更新 isDirty */
   useEffect(() => {
@@ -206,12 +244,13 @@ export function usePulse() {
       url.trim() !== s.url ||
       JSON.stringify(headers) !== JSON.stringify(s.headers) ||
       body !== s.body ||
+      JSON.stringify(bodyParams) !== JSON.stringify(s.bodyParams) ||
       contentType !== s.contentType ||
       authType !== s.authType ||
       bearerToken !== s.bearerToken ||
       JSON.stringify(rawParams) !== JSON.stringify(s.rawParams);
     setIsDirty(changed);
-  }, [method, url, headers, body, contentType, authType, bearerToken, rawParams]);
+  }, [method, url, headers, body, bodyParams, contentType, authType, bearerToken, rawParams]);
 
   // ── 删除确认对话框状态 ──
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -448,12 +487,20 @@ export function usePulse() {
         finalUrl = base + path;
       }
 
+      // 步骤：根据 Content-Type 决定请求体
+      // - application/x-www-form-urlencoded → 将 bodyParams 序列化为 URL 编码字符串
+      // - 其他类型 → 使用原始 body 文本
+      let finalBody = body;
+      if (contentType === "application/x-www-form-urlencoded") {
+        finalBody = serializeBodyParams(bodyParams);
+      }
+
       const result = await invoke<ResponseData>("send_request", {
         input: {
           method,
           url: finalUrl,
           headers: cleanHeaders,
-          body: body || null,
+          body: finalBody || null,
           content_type: contentType || null,
         },
         variables: activeVars,
@@ -475,7 +522,7 @@ export function usePulse() {
     } finally {
       setIsLoading(false);
     }
-  }, [method, url, headers, body, contentType, authType, bearerToken, environments, activeEnvironmentId, collections, editingRequest]);
+  }, [method, url, headers, body, bodyParams, contentType, authType, bearerToken, environments, activeEnvironmentId, collections, editingRequest]);
 
   // ── 请求头 CRUD ──
 
@@ -548,6 +595,27 @@ export function usePulse() {
     setRawParams((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  // ── Body 键值对 CRUD（用于 form-urlencoded 类型） ──
+
+  const addBodyParam = useCallback(() => {
+    setBodyParams((prev) => [...prev, { key: "", value: "", enabled: true }]);
+  }, []);
+
+  const updateBodyParam = useCallback(
+    (index: number, field: keyof HeaderInput, value: string | boolean) => {
+      setBodyParams((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], [field]: value };
+        return next;
+      });
+    },
+    [],
+  );
+
+  const removeBodyParam = useCallback((index: number) => {
+    setBodyParams((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
   // ── 从历史加载请求 ──
 
   const loadFromHistory = useCallback((item: HistoryItem) => {
@@ -568,6 +636,14 @@ export function usePulse() {
       );
       setBody(item.body ?? "");
       setContentType(item.contentType ?? "application/json");
+      // 加载 bodyParams：如果已保存则直接使用，否则如果是 form-urlencoded 类型则从 body 字符串解析
+      if (item.bodyParams?.length) {
+        setBodyParams(item.bodyParams);
+      } else if ((item.contentType ?? "application/json") === "application/x-www-form-urlencoded" && item.body) {
+        setBodyParams(parseBodyParams(item.body));
+      } else {
+        setBodyParams([{ key: "", value: "", enabled: true }]);
+      }
       setAuthType((item.authType as AuthType) ?? "none");
       setBearerToken(item.bearerToken ?? "");
       setRawParams(
@@ -605,6 +681,7 @@ export function usePulse() {
     setUrl("");
     setHeaders([{ key: "", value: "", enabled: true }]);
     setBody("");
+    setBodyParams([{ key: "", value: "", enabled: true }]);
     setContentType("application/json");
     setAuthType("none");
     setBearerToken("");
@@ -624,6 +701,13 @@ export function usePulse() {
    * - 如果是新请求 → 弹出命名对话框，添加到第一个集合（或创建新集合）
    */
   const saveCurrentRequest = useCallback(() => {
+    // 根据 Content-Type 计算待保存的请求体：
+    // - form-urlencoded → 从 bodyParams 序列化为 URL 编码字符串
+    // - 其他类型 → 直接使用 body 文本
+    const bodyToSave = contentType === "application/x-www-form-urlencoded"
+      ? serializeBodyParams(bodyParams)
+      : body;
+
     const filteredHeaders = headers
       .filter((h) => h.key.trim())
       .concat(
@@ -648,11 +732,12 @@ export function usePulse() {
                         method,
                         url: url.trim(),
                         headers: filteredHeaders,
-                        body,
+                        body: bodyToSave,
                         contentType,
                         authType,
                         bearerToken,
                         params: rawParams,
+                        bodyParams,
                       }
                     : r,
                 ),
@@ -676,6 +761,7 @@ export function usePulse() {
     url,
     headers,
     body,
+    bodyParams,
     contentType,
     authType,
     bearerToken,
@@ -693,6 +779,11 @@ export function usePulse() {
     const name = saveDialogName.trim();
     if (!name) return;
 
+    // 根据 Content-Type 计算待保存的请求体
+    const bodyToSave = contentType === "application/x-www-form-urlencoded"
+      ? serializeBodyParams(bodyParams)
+      : body;
+
     const filteredHeaders = headers
       .filter((h) => h.key.trim())
       .concat(
@@ -708,11 +799,12 @@ export function usePulse() {
       method,
       url: url.trim(),
       headers: filteredHeaders,
-      body,
+      body: bodyToSave,
       contentType,
       authType,
       bearerToken,
       params: rawParams,
+      bodyParams,
     };
 
     let colId: string;
@@ -737,7 +829,7 @@ export function usePulse() {
     requestAnimationFrame(() => { updateSnapshot(); });
     const colName = collections.find((c) => c.id === colId)?.name ?? "My Collection";
     addToast({ type: "success", message: `Saved to ${colName}` });
-  }, [saveDialogName, method, url, headers, body, contentType, authType, bearerToken, rawParams, collections, addToast, updateSnapshot]);
+  }, [saveDialogName, method, url, headers, body, bodyParams, contentType, authType, bearerToken, rawParams, collections, addToast, updateSnapshot]);
 
   const cancelSave = useCallback(() => {
     setSaveDialogVisible(false);
@@ -978,6 +1070,10 @@ export function usePulse() {
     headers,
     body,
     setBody,
+    bodyParams,
+    addBodyParam,
+    updateBodyParam,
+    removeBodyParam,
     contentType,
     setContentType,
     rawParams,

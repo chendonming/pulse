@@ -17,6 +17,11 @@ interface RequestPanelProps {
   onRemoveHeader: (i: number) => void;
   body: string;
   onBodyChange: (b: string) => void;
+  /** 请求体键值对（用于 application/x-www-form-urlencoded 类型） */
+  bodyParams: HeaderInput[];
+  onAddBodyParam: () => void;
+  onUpdateBodyParam: (i: number, f: keyof HeaderInput, v: string | boolean) => void;
+  onRemoveBodyParam: (i: number) => void;
   contentType: string;
   onContentTypeChange: (ct: string) => void;
   isLoading: boolean;
@@ -92,6 +97,10 @@ export default function RequestPanel({
   onRemoveHeader,
   body,
   onBodyChange,
+  bodyParams,
+  onAddBodyParam,
+  onUpdateBodyParam,
+  onRemoveBodyParam,
   contentType,
   onContentTypeChange,
   isLoading,
@@ -362,7 +371,7 @@ export default function RequestPanel({
           }`}
         >
           Body
-          {body && (
+          {(body || bodyParams.some((p) => p.key.trim())) && (
             <span className="ml-1.5 px-1 py-0.5 text-[10px] rounded bg-pulse-accent/10 text-pulse-accent">
               ●
             </span>
@@ -547,7 +556,7 @@ export default function RequestPanel({
           </div>
         )}
 
-        {/* Body Tab：Content-Type 选择 + 请求体文本域 */}
+        {/* Body Tab：Content-Type 选择 + 请求体编辑器 */}
         {requestTab === "body" && (
           <div className="p-2 space-y-2">
             <div className="flex items-center gap-2">
@@ -563,13 +572,96 @@ export default function RequestPanel({
                 ))}
               </select>
             </div>
-            <textarea
-              value={body}
-              onChange={(e) => onBodyChange(e.target.value)}
-              placeholder="Request body (raw)"
-              className="w-full h-28 bg-pulse-deepest border border-pulse-border rounded-lg px-3 py-2 text-xs font-mono text-pulse-text-primary placeholder-pulse-text-muted/50 resize-none transition-colors"
-              spellCheck={false}
-            />
+            {/* application/x-www-form-urlencoded → 键值对编辑器 */}
+            {contentType === "application/x-www-form-urlencoded" ? (
+              <div className="space-y-1">
+                <div className="grid grid-cols-[1fr_1fr_24px] gap-1.5 text-[11px] text-pulse-text-muted font-medium px-2 pb-1">
+                  <span>Key</span>
+                  <span>Value</span>
+                </div>
+                {bodyParams.map((param, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_24px] gap-1.5 items-center">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => onUpdateBodyParam(i, "enabled", !param.enabled)}
+                        className={`shrink-0 w-3.5 h-3.5 rounded border ${
+                          param.enabled
+                            ? "bg-pulse-accent border-pulse-accent"
+                            : "bg-pulse-deepest border-pulse-border"
+                        } flex items-center justify-center transition-colors`}
+                      >
+                        {param.enabled && (
+                          <svg
+                            className="w-2.5 h-2.5 text-pulse-deepest"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={3}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        )}
+                      </button>
+                      <input
+                        type="text"
+                        value={param.key}
+                        onChange={(e) =>
+                          onUpdateBodyParam(i, "key", e.target.value)
+                        }
+                        placeholder="Field name"
+                        className="flex-1 bg-pulse-deepest border border-pulse-border rounded px-2 py-1 text-xs font-mono text-pulse-text-primary placeholder-pulse-text-muted/50 transition-colors"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={param.value}
+                      onChange={(e) =>
+                        onUpdateBodyParam(i, "value", e.target.value)
+                      }
+                      placeholder="Value"
+                      className="bg-pulse-deepest border border-pulse-border rounded px-2 py-1 text-xs font-mono text-pulse-text-primary placeholder-pulse-text-muted/50 transition-colors"
+                    />
+                    <button
+                      onClick={() => onRemoveBodyParam(i)}
+                      className="text-pulse-text-muted hover:text-pulse-rose transition-colors p-0.5"
+                    >
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={onAddBodyParam}
+                  className="btn-ghost text-xs w-full justify-center py-1"
+                >
+                  + Add field
+                </button>
+              </div>
+            ) : (
+              /* 其他 Content-Type → 原始文本域 */
+              <textarea
+                value={body}
+                onChange={(e) => onBodyChange(e.target.value)}
+                placeholder="Request body (raw)"
+                className="w-full h-28 bg-pulse-deepest border border-pulse-border rounded-lg px-3 py-2 text-xs font-mono text-pulse-text-primary placeholder-pulse-text-muted/50 resize-none transition-colors"
+                spellCheck={false}
+              />
+            )}
           </div>
         )}
       </div>

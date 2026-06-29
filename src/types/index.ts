@@ -59,6 +59,8 @@ export interface RequestItem {
   bearerToken: string;
   /** URL 查询参数列表 */
   params: HeaderInput[];
+  /** 请求体键值对（用于 application/x-www-form-urlencoded），可选向后兼容 */
+  bodyParams?: HeaderInput[];
 }
 
 /** 历史记录摘要（侧边栏列表用，不含完整请求详情） */

@@ -40,6 +40,18 @@ import { CSS } from "@dnd-kit/utilities";
 const CP = "c:"; // Collection Prefix
 const RP = "r:"; // Request Prefix
 
+/** 集合色标指示点颜色循环调色板（8种，使用现有 pulse 语义色） */
+const COLLECTION_DOT_COLORS = [
+  "bg-pulse-indigo",
+  "bg-pulse-teal",
+  "bg-pulse-blue",
+  "bg-pulse-purple",
+  "bg-pulse-amber",
+  "bg-pulse-rose",
+  "bg-pulse-emerald",
+  "bg-pulse-sky",
+] as const;
+
 /** 将集合 ID 编码为拖拽 ID */
 function cid(id: string) {
   return `${CP}${id}`;
@@ -98,10 +110,13 @@ function SortableColHeader({
   id,
   name,
   count,
+  colorClass,
 }: {
   id: string;
   name: string;
   count: number;
+  /** 集合色标指示点的 Tailwind 背景色 class（循环调色板） */
+  colorClass: string;
 }) {
   const {
     attributes,
@@ -125,8 +140,10 @@ function SortableColHeader({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-pulse-text-muted uppercase tracking-wider select-none"
+      className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold text-pulse-text-secondary uppercase tracking-wider select-none"
     >
+      {/* 集合色标指示点 —— 循环调色板，快速区分不同集合 */}
+      <span className={`w-2 h-2 rounded-full shrink-0 ${colorClass}`} />
       {/* 六点手柄拖拽图标 */}
       <span
         {...listeners}
@@ -192,7 +209,7 @@ function SortableRequestItem({
       {...attributes}
       {...listeners}
       onClick={onLoad}
-      className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs cursor-pointer hover:bg-pulse-hover transition-colors text-left group"
+      className="w-full flex items-center gap-2.5 pl-5 pr-3 py-1.5 text-xs cursor-pointer hover:bg-pulse-hover transition-colors text-left group"
     >
       <span
         className={`font-mono font-semibold text-[10px] uppercase tracking-wide ${
@@ -547,6 +564,7 @@ export default memo(function Sidebar({
                   {(() => {
                     const nodes: React.ReactNode[] = [];
                     let lastColId: string | null = null;
+                    let colIndex = 0; // 集合序号，用于循环分配色标颜色
 
                     for (const item of flatItems) {
                       const p = parse(item.dndId);
@@ -557,16 +575,24 @@ export default memo(function Sidebar({
                         const col = collections.find((c) => c.id === p.colId);
                         if (!col) continue;
 
+                        // 按集合出现顺序循环分配颜色
+                        const colorClass = COLLECTION_DOT_COLORS[colIndex % COLLECTION_DOT_COLORS.length];
+                        colIndex++;
+
                         nodes.push(
-                          <div key={item.dndId} className="mt-2 first:mt-0">
+                          <div
+                            key={item.dndId}
+                            className="mt-3 pt-2 border-t border-pulse-border first:mt-0 first:pt-0 first:border-t-0"
+                          >
                             <SortableColHeader
                               id={item.dndId}
                               name={col.name}
                               count={col.requests.length}
+                              colorClass={colorClass}
                             />
 
                             {/* 集合 Base URL 输入 */}
-                            <div className="px-3 py-1">
+                            <div className="pl-5 pr-3 py-1">
                               <input
                                 value={col.base_url}
                                 onChange={(e) =>
@@ -584,7 +610,7 @@ export default memo(function Sidebar({
                                   expandedAuthCol === col.id ? null : col.id,
                                 )
                               }
-                              className="w-full flex items-center gap-2 px-3 py-1 text-[11px] text-pulse-text-muted hover:text-pulse-text-secondary hover:bg-pulse-hover transition-colors group"
+                              className="w-full flex items-center gap-2 pl-5 pr-3 py-1 text-[11px] text-pulse-text-muted hover:text-pulse-text-secondary hover:bg-pulse-hover transition-colors group"
                             >
                               <svg
                                 className="w-3.5 h-3.5 shrink-0"
@@ -629,7 +655,7 @@ export default memo(function Sidebar({
 
                             {/* 展开的认证编辑区域 */}
                             {expandedAuthCol === col.id && (
-                              <div className="px-3 py-1.5 space-y-1.5 bg-pulse-deepest/40">
+                              <div className="pl-5 pr-3 py-1.5 space-y-1.5 bg-pulse-deepest/40">
                                 <select
                                   value={col.authType}
                                   onChange={(e) =>

@@ -175,6 +175,10 @@ export default function App() {
           onRemoveHeader={state.removeHeader}
           body={state.body}
           onBodyChange={state.setBody}
+          bodyParams={state.bodyParams}
+          onAddBodyParam={state.addBodyParam}
+          onUpdateBodyParam={state.updateBodyParam}
+          onRemoveBodyParam={state.removeBodyParam}
           contentType={state.contentType}
           onContentTypeChange={state.setContentType}
           isLoading={state.isLoading}
