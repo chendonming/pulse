@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import type { ResponseData } from "../types";
 import WaterfallChart from "./WaterfallChart";
 import JsonViewer from "./JsonViewer";
@@ -43,6 +43,8 @@ export default memo(function ResponsePanel({
   responseTab,
   onResponseTabChange,
 }: ResponsePanelProps) {
+  // 瀑布图折叠状态
+  const [waterfallCollapsed, setWaterfallCollapsed] = useState(false);
   if (isLoading) {
     return (
       <div className="h-full flex flex-col bg-pulse-deepest animate-fade-in">
@@ -153,17 +155,30 @@ export default memo(function ResponsePanel({
             className={`h-1.5 w-1.5 rounded-full ${getStatusBarColor(response.status)}`}
           />
         </div>
-        <span className="text-xs text-pulse-text-muted font-mono">
+        {/* 响应时间 —— 点击可折叠/展开瀑布图 */}
+        <button
+          onClick={() => setWaterfallCollapsed(!waterfallCollapsed)}
+          className="flex items-center gap-1 text-xs text-pulse-text-muted font-mono hover:text-pulse-text-secondary transition-colors"
+          title={waterfallCollapsed ? "展开瀑布图" : "折叠瀑布图"}
+        >
+          <svg
+            className={`w-3 h-3 transition-transform duration-200 ${waterfallCollapsed ? "-rotate-90" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
           {response.timing.total_ms < 1000
             ? `${response.timing.total_ms.toFixed(0)} ms`
             : `${(response.timing.total_ms / 1000).toFixed(2)} s`}
-        </span>
+        </button>
         <span className="text-xs text-pulse-text-muted">{response.size_label}</span>
       </div>
 
       <div className="flex-1 flex flex-col min-h-0">
-        {/* 耗时瀑布图 */}
-        <WaterfallChart timing={response.timing} />
+        {/* 耗时瀑布图（可折叠） */}
+        {!waterfallCollapsed && <WaterfallChart timing={response.timing} />}
 
         {/* Tab：Body / Headers */}
         <div className="flex items-center gap-1 px-3 border-b border-pulse-border shrink-0">
