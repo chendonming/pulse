@@ -14,6 +14,9 @@ import type {
   EnvironmentVariable,
   EnvironmentData,
   CollectionData,
+  ImportExportStrategy,
+  ImportPreview,
+  ImportResult,
 } from "../types";
 import type { ToastItem } from "../components/Toast";
 
@@ -1055,6 +1058,134 @@ export function usePulse() {
   }, []);
 
   // ============================================================
+  // 导入/导出
+  // ============================================================
+
+  const [importDialogVisible, setImportDialogVisible] = useState(false);
+  const [exportDialogVisible, setExportDialogVisible] = useState(false);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importFileName, setImportFileName] = useState("");
+  const [importStrategy, setImportStrategy] = useState<ImportExportStrategy>("replace");
+  const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  /** 打开导入对话框 */
+  const openImportDialog = useCallback(() => {
+    // 重置状态
+    setImportPreview(null);
+    setImportFileName("");
+    setPendingImportPath(null);
+    setImportError(null);
+    setImportStrategy("replace");
+    setImportDialogVisible(true);
+  }, []);
+
+  /** 关闭导入对话框 */
+  const closeImportDialog = useCallback(() => {
+    setImportDialogVisible(false);
+    setImportPreview(null);
+    setImportFileName("");
+    setPendingImportPath(null);
+    setImportError(null);
+  }, []);
+
+  /** 打开导出对话框 */
+  const openExportDialog = useCallback(() => {
+    setExportDialogVisible(true);
+  }, []);
+
+  /** 关闭导出对话框 */
+  const closeExportDialog = useCallback(() => {
+    setExportDialogVisible(false);
+  }, []);
+
+  /**
+   * Step 1: 用户选取导入文件
+   * 调用原生文件选择器，解析文件内容，返回预览信息
+   */
+  const handlePickImportFile = useCallback(async () => {
+    try {
+      setImportError(null);
+      // 调用 Rust 原生文件选择器 + 读取 + 解析
+      const path = await invoke<string | null>("pick_import_file", {});
+      if (!path) return; // 用户取消
+
+      const preview = await invoke<ImportPreview>("preview_import", { path });
+      setImportPreview(preview);
+      setImportFileName(path.split(/[/\\]/).pop() || path);
+      setPendingImportPath(path);
+    } catch (e) {
+      setImportError(typeof e === "string" ? e : "Failed to read file");
+    }
+  }, []);
+
+  /**
+   * 刷新前端数据（从 Rust 重新加载）
+   * 在导入完成后调用，使前端状态与后端持久化同步
+   */
+  const refreshData = useCallback(async () => {
+    try {
+      const cd = await invoke<CollectionData | null>("load_collections");
+      if (cd?.collections?.length) {
+        setCollections(cd.collections);
+      }
+      const ed = await invoke<EnvironmentData>("load_environments");
+      setEnvironments(ed.environments);
+      setActiveEnvironmentId(ed.active_id);
+    } catch (e) {
+      console.error("Failed to refresh data:", e);
+    }
+  }, []);
+
+  /**
+   * Step 2: 用户确认导入
+   * 按策略合并/替换数据到 app_data_dir，然后刷新前端
+   */
+  const handleConfirmImport = useCallback(async () => {
+    if (!pendingImportPath) return;
+    try {
+      setImportError(null);
+      const result = await invoke<ImportResult>("import_data_from_file", {
+        path: pendingImportPath,
+        strategy: importStrategy,
+      });
+
+      // 刷新前端状态
+      await refreshData();
+
+      addToast({
+        type: "success",
+        message: `Imported ${result.collections_count} collections and ${result.environments_count} environments`,
+      });
+      closeImportDialog();
+    } catch (e) {
+      setImportError(typeof e === "string" ? e : "Import failed");
+    }
+  }, [pendingImportPath, importStrategy, refreshData, addToast, closeImportDialog]);
+
+  /**
+   * 执行导出
+   * @param format "json" | "yaml"
+   */
+  const handleExport = useCallback(async (format: string) => {
+    try {
+      const fileName = await invoke<string | null>("export_data_to_file", { format });
+      if (!fileName) return; // 用户取消保存对话框
+
+      addToast({
+        type: "success",
+        message: `Exported to ${fileName}`,
+      });
+      closeExportDialog();
+    } catch (e) {
+      addToast({
+        type: "error",
+        message: typeof e === "string" ? e : "Export failed",
+      });
+    }
+  }, [addToast, closeExportDialog]);
+
+  // ============================================================
   // 导出状态和方法（组件通过 props 接收）
   // ============================================================
 
@@ -1138,5 +1269,22 @@ export function usePulse() {
     addVariable,
     updateVariable,
     removeVariable,
+    /* ── 导入/导出 ── */
+    importDialogVisible,
+    exportDialogVisible,
+    importPreview,
+    importFileName,
+    importStrategy,
+    setImportStrategy,
+    importError,
+    pendingImportPath,
+    openImportDialog,
+    closeImportDialog,
+    openExportDialog,
+    closeExportDialog,
+    handlePickImportFile,
+    handleConfirmImport,
+    handleExport,
+    refreshData,
   };
 }

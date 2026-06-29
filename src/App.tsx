@@ -9,6 +9,8 @@ import RequestPanel from "./components/RequestPanel";
 import ResponsePanel from "./components/ResponsePanel";
 import SaveDialog from "./components/SaveDialog";
 import ConfirmDialog from "./components/ConfirmDialog";
+import ImportDialog from "./components/ImportDialog";
+import ExportDialog from "./components/ExportDialog";
 import ToastContainer from "./components/Toast";
 
 /**
@@ -161,6 +163,8 @@ export default function App() {
         onAddVariable={state.addVariable}
         onUpdateVariable={state.updateVariable}
         onRemoveVariable={state.removeVariable}
+        onImport={state.openImportDialog}
+        onExport={state.openExportDialog}
       />
 
       <main className="flex-1 flex flex-col min-w-0">
@@ -318,6 +322,29 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* 导入对话框 */}
+      <ImportDialog
+        visible={state.importDialogVisible}
+        preview={state.importPreview}
+        fileName={state.importFileName}
+        strategy={state.importStrategy}
+        hasPending={state.pendingImportPath !== null}
+        error={state.importError}
+        onStrategyChange={state.setImportStrategy}
+        onPickFile={state.handlePickImportFile}
+        onConfirm={state.handleConfirmImport}
+        onCancel={state.closeImportDialog}
+      />
+
+      {/* 导出对话框 */}
+      <ExportDialog
+        visible={state.exportDialogVisible}
+        collectionsCount={state.collections.length}
+        environmentsCount={state.environments.length}
+        onExport={state.handleExport}
+        onCancel={state.closeExportDialog}
+      />
 
       {/* Toast 通知容器 */}
       <ToastContainer toasts={state.toasts} onDismiss={state.dismissToast} />

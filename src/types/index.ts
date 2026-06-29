@@ -143,3 +143,31 @@ export interface KeybindingData {
   version: number;
   bindings: Record<string, string[]>;
 }
+
+// ============================================================
+// 导入/导出相关类型定义
+// ============================================================
+
+/** 导入/导出信封数据 */
+export interface ExportData {
+  version: number;
+  exported_at: string;
+  collections: CollectionData;
+  environments: EnvironmentData;
+}
+
+/** 导入合并策略 */
+export type ImportExportStrategy = "replace" | "merge";
+
+/** 导入文件预览信息 */
+export interface ImportPreview {
+  collections_count: number;
+  environments_count: number;
+}
+
+/** 导入操作结果统计 */
+export interface ImportResult {
+  collections_count: number;
+  environments_count: number;
+  active_id_changed: boolean;
+}

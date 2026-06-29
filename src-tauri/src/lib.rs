@@ -6,10 +6,13 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use tauri::{AppHandle, Emitter, Manager};
-
+use tauri_plugin_dialog::DialogExt;
 // ===== Mock 测试服务器（feature flag 控制，默认不编译） =====
 #[cfg(feature = "mock-server")]
 mod mock_server;
+
+// ===== 导入/导出核心模块（纯 Rust，无 Tauri 依赖，CLI 可复用） =====
+mod io;
 
 // ============================================================
 // 常量定义
@@ -59,7 +62,7 @@ pub struct Environment {
 }
 
 /** 环境数据：全部环境列表 + 当前激活的环境 ID */
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnvironmentData {
     pub environments: Vec<Environment>,
     pub active_id: Option<String>,
@@ -540,6 +543,277 @@ fn save_keybindings(app: AppHandle, data: KeybindingData) -> Result<(), String> 
     Ok(())
 }
 
+// ============================================================
+// 导入/导出命令
+// ============================================================
+
+/**
+ * export_data_to_file：导出所有数据到文件
+ *
+ * 1. 从 app_data_dir 读取集合和环境数据
+ * 2. 构建 ExportData 信封
+ * 3. 序列化为 JSON 或 YAML
+ * 4. 弹出原生保存对话框
+ * 5. 写入文件
+ *
+ * 返回保存的文件名（用户取消时返回 None）
+ */
+#[tauri::command]
+async fn export_data_to_file(app: AppHandle, format: String) -> Result<Option<String>, String> {
+    let export_fmt = io::ExportFormat::from_str(&format)?;
+
+    // 读取集合数据
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    let collections_path = data_dir.join("collections.json");
+    let collections: serde_json::Value = if collections_path.exists() {
+        let content = std::fs::read_to_string(&collections_path)
+            .map_err(|e| format!("Failed to read collections: {}", e))?;
+        serde_json::from_str(&content).unwrap_or(serde_json::Value::Null)
+    } else {
+        serde_json::Value::Null
+    };
+
+    // 读取环境数据
+    let environments_path = data_dir.join("environments.json");
+    let environments: EnvironmentData = if environments_path.exists() {
+        let content = std::fs::read_to_string(&environments_path)
+            .map_err(|e| format!("Failed to read environments: {}", e))?;
+        serde_json::from_str(&content).unwrap_or(EnvironmentData {
+            environments: vec![],
+            active_id: None,
+        })
+    } else {
+        EnvironmentData {
+            environments: vec![],
+            active_id: None,
+        }
+    };
+
+    // 构建导出信封
+    let exported_at = chrono_now_iso();
+    let export_data = io::build_export_data(&collections, &environments, &exported_at);
+
+    // 序列化
+    let content = io::serialize_export(&export_data, export_fmt)?;
+
+    // 弹出原生保存对话框
+    let default_filename = format!("pulse-export-{}.{}",
+        exported_at.replace(':', "-").split('.').next().unwrap_or("unknown"),
+        export_fmt.to_extension()
+    );
+
+    let file_path = app
+        .dialog()
+        .file()
+        .add_filter(export_fmt.file_filter_label(), &[export_fmt.to_extension()])
+        .set_file_name(&default_filename)
+        .blocking_save_file();
+
+    let Some(path) = file_path else {
+        return Ok(None); // 用户取消
+    };
+
+    // 写入文件
+    let path_str = path.to_string();
+    std::fs::write(&path_str, &content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    // 提取文件名用于返回
+    let file_name = std::path::Path::new(&path_str)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&path_str)
+        .to_string();
+
+    Ok(Some(file_name))
+}
+
+/**
+ * 获取当前时间的 ISO 8601 格式字符串
+ * 不使用 chrono crate，保持最小依赖
+ */
+fn chrono_now_iso() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    // 简单计算 YYYY-MM-DDTHH:MM:SS.000Z 格式
+    // 从 Unix 纪元秒数计算
+    let secs_per_day: u64 = 86400;
+    let days = now / secs_per_day;
+    let time_secs = now % secs_per_day;
+
+    // 闰年计算（1970-01-01 基准）
+    let mut y = 1970i64;
+    let mut remaining_days = days as i64;
+    loop {
+        let days_in_year = if is_leap_year(y) { 366 } else { 365 };
+        if remaining_days < days_in_year {
+            break;
+        }
+        remaining_days -= days_in_year;
+        y += 1;
+    }
+
+    let mut m = 1;
+    let month_days = if is_leap_year(y) {
+        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    } else {
+        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    };
+    for &md in &month_days {
+        if remaining_days < md {
+            break;
+        }
+        remaining_days -= md;
+        m += 1;
+    }
+    let d = remaining_days + 1; // day of month (1-based)
+
+    let hours = time_secs / 3600;
+    let minutes = (time_secs % 3600) / 60;
+    let seconds = time_secs % 60;
+
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.000Z",
+        y, m, d, hours, minutes, seconds
+    )
+}
+
+fn is_leap_year(y: i64) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0)
+}
+
+/**
+ * preview_import：预览导入文件内容（不写入）
+ *
+ * 解析并验证文件内容，返回集合和环境数量的摘要信息，
+ * 供前端对话框显示确认。
+ */
+#[tauri::command]
+fn preview_import(path: String) -> Result<io::ImportPreview, String> {
+    let content =
+        std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {}", e))?;
+
+    let fmt = io::ExportFormat::from_extension(&path)?;
+    let preview = io::preview_from_content(&content, fmt)?;
+    Ok(preview)
+}
+
+/**
+ * import_data_from_file：从文件导入数据
+ *
+ * 1. 读取并解析文件（JSON/YAML 自动检测）
+ * 2. 验证导入数据结构
+ * 3. 按策略合并/替换现有数据
+ * 4. 写入 app_data_dir
+ *
+ * strategy: "replace" 或 "merge"
+ */
+#[tauri::command]
+fn import_data_from_file(
+    app: AppHandle,
+    path: String,
+    strategy: String,
+) -> Result<io::ImportResult, String> {
+    let content =
+        std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {}", e))?;
+
+    let fmt = io::ExportFormat::from_extension(&path)?;
+    let import_data = io::deserialize_import(&content, fmt)?;
+    io::validate_import(&import_data)?;
+
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|e| format!("Failed to create data dir: {}", e))?;
+
+    // 读取现有数据
+    let collections_path = data_dir.join("collections.json");
+    let existing_collections: serde_json::Value = if collections_path.exists() {
+        let c = std::fs::read_to_string(&collections_path)
+            .map_err(|e| format!("Failed to read collections: {}", e))?;
+        serde_json::from_str(&c).unwrap_or(serde_json::json!({ "collections": [] }))
+    } else {
+        serde_json::json!({ "collections": [] })
+    };
+
+    let environments_path = data_dir.join("environments.json");
+    let existing_environments: EnvironmentData = if environments_path.exists() {
+        let c = std::fs::read_to_string(&environments_path)
+            .map_err(|e| format!("Failed to read environments: {}", e))?;
+        serde_json::from_str(&c).unwrap_or(EnvironmentData {
+            environments: vec![],
+            active_id: None,
+        })
+    } else {
+        EnvironmentData {
+            environments: vec![],
+            active_id: None,
+        }
+    };
+
+    // 按策略合并
+    let (final_collections, final_environments) = match strategy.as_str() {
+        "replace" => (import_data.collections, import_data.environments),
+        "merge" => (
+            io::merge_collections(&existing_collections, &import_data.collections),
+            io::merge_environments(&existing_environments, &import_data.environments),
+        ),
+        _ => return Err(format!("Unknown strategy: '{}'. Expected 'replace' or 'merge'", strategy)),
+    };
+
+    // 写入文件
+    let coll_content = serde_json::to_string_pretty(&final_collections)
+        .map_err(|e| format!("Failed to serialize collections: {}", e))?;
+    std::fs::write(&collections_path, coll_content)
+        .map_err(|e| format!("Failed to write collections: {}", e))?;
+
+    let env_content = serde_json::to_string_pretty(&final_environments)
+        .map_err(|e| format!("Failed to serialize environments: {}", e))?;
+    std::fs::write(&environments_path, env_content)
+        .map_err(|e| format!("Failed to write environments: {}", e))?;
+
+    let collections_count = final_collections["collections"]
+        .as_array()
+        .map(|a| a.len())
+        .unwrap_or(0);
+    let environments_count = final_environments.environments.len();
+    let active_id_changed = final_environments.active_id.is_some();
+
+    Ok(io::ImportResult {
+        collections_count,
+        environments_count,
+        active_id_changed,
+    })
+}
+
+/**
+ * pick_import_file：弹出原生文件打开对话框，选择导入文件
+ *
+ * 文件过滤器：.json, .yaml, .yml
+ * 返回文件路径（用户取消时返回 None）
+ */
+#[tauri::command]
+async fn pick_import_file(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let file_path = app
+        .dialog()
+        .file()
+        .add_filter("Pulse Export", &["json", "yaml", "yml"])
+        .blocking_pick_file();
+
+    Ok(file_path.map(|p| p.to_string()))
+}
+
 /**
  * 应用入口
  *
@@ -552,6 +826,7 @@ fn save_keybindings(app: AppHandle, data: KeybindingData) -> Result<(), String> 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(LogStore {
             entries: Vec::new(),
         }))
@@ -565,6 +840,10 @@ pub fn run() {
             save_collections,
             load_keybindings,
             save_keybindings,
+            export_data_to_file,
+            preview_import,
+            import_data_from_file,
+            pick_import_file,
         ])
         .setup(|app| {
             // 创建独立的日志查看窗口（标签为 "logs"）
