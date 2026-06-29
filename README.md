@@ -201,6 +201,93 @@ cargo test         # Run Rust tests
 
 ---
 
+## AI Agent Integration
+
+Pulse provides a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server that lets AI agents — including **Claude Code** — directly send HTTP requests, run tests, and manage collections from a conversation.
+
+```
+Claude Code  ──MCP JSON-RPC over stdio──▶  pulse-mcp  ──pulse-core──▶  Target API
+```
+
+### Quick Install
+
+```bash
+# 1. Build pulse-mcp
+npm run mcp:build:release
+
+# 2. Install to PATH
+cp src-tauri/target/release/pulse-mcp /usr/local/bin/
+pulse-mcp --version        # Verify
+```
+
+### Register with Claude Code
+
+Create `.claude/settings.local.json` in the project root:
+
+```json
+{
+  "mcpServers": {
+    "pulse": {
+      "type": "stdio",
+      "command": "pulse-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+> If `pulse-mcp` is not on your `$PATH`, use its absolute path instead (e.g. `/Users/you/project/src-tauri/target/release/pulse-mcp`).
+
+Restart Claude Code. It will auto-discover the server and load its tools.
+
+### Available MCP Tools
+
+Once registered, Claude can invoke these tools automatically based on your request:
+
+| Tool | What it does |
+|------|-------------|
+| `send_request` | Send any HTTP request (method, URL, headers, body, env vars) |
+| `run_test_script` | Run a YAML test script with assertions |
+| `run_test_file` | Run a test script from a file path |
+| `list_collections` | List all saved API collections |
+| `get_collection_tree` | Full collection tree with methods and URLs |
+| `get_collection_request` | Extract a specific request by collection and request name |
+| `list_environments` | List all environments |
+| `activate_environment` | Switch the active environment |
+
+### Usage Examples
+
+Try these prompts in Claude Code:
+
+| What you say | What Claude does |
+|-------------|-----------------|
+| "List my API collections" | Calls `list_collections` |
+| "Send a GET request to https://api.example.com/users" | Calls `send_request(method="GET", url="...")` |
+| "Activate staging environment, then fetch user list" | Calls `activate_environment` then `send_request` |
+| "Run tests/user-crud.yaml against staging" | Calls `run_test_file` |
+| "What environments do I have?" | Calls `list_environments` |
+
+### CLI Fallback (no MCP)
+
+If pulse-mcp is not yet built, Claude Code can still use Pulse via shell commands:
+
+```bash
+! pulse request -m GET https://api.example.com/users
+! pulse test tests/user-crud.yaml
+! pulse collections list --json
+```
+
+But the MCP experience is superior — Claude sees tool signatures, parameter descriptions, and automatically fills in defaults. **We recommend completing the MCP setup.**
+
+### Uninstall
+
+```bash
+rm /usr/local/bin/pulse-mcp
+rm .claude/settings.local.json
+```
+
+---
+
 ## Project Structure
 
 ```

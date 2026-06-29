@@ -201,6 +201,93 @@ cargo test                    # 运行 Rust 测试
 
 ---
 
+## AI Agent 集成
+
+Pulse 提供 [Model Context Protocol](https://modelcontextprotocol.io/)（MCP）服务器，让 AI 代理（包括 **Claude Code**）可以在对话中直接发送 HTTP 请求、运行测试和管理集合。
+
+```
+Claude Code  ──MCP JSON-RPC over stdio──▶  pulse-mcp  ──pulse-core──▶  目标 API
+```
+
+### 快速安装
+
+```bash
+# 1. 构建 pulse-mcp
+npm run mcp:build:release
+
+# 2. 安装到 PATH
+cp src-tauri/target/release/pulse-mcp /usr/local/bin/
+pulse-mcp --version        # 验证
+```
+
+### 注册到 Claude Code
+
+在项目根目录创建 `.claude/settings.local.json`：
+
+```json
+{
+  "mcpServers": {
+    "pulse": {
+      "type": "stdio",
+      "command": "pulse-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+> 如果 `pulse-mcp` 不在 `$PATH` 中，请使用绝对路径代替（如 `/Users/you/project/src-tauri/target/release/pulse-mcp`）。
+
+重启 Claude Code，它会自动发现 MCP 服务器并加载工具列表。
+
+### 可用 MCP 工具
+
+注册后，Claude 会根据你的请求自动调用以下工具：
+
+| 工具 | 功能 |
+|------|------|
+| `send_request` | 发送任意 HTTP 请求（方法、URL、请求头、请求体、环境变量） |
+| `run_test_script` | 运行 YAML 测试脚本（含断言） |
+| `run_test_file` | 从文件路径运行测试脚本 |
+| `list_collections` | 列出所有已保存的 API 集合 |
+| `get_collection_tree` | 完整集合树（含方法和 URL） |
+| `get_collection_request` | 按集合名和请求名提取特定请求配置 |
+| `list_environments` | 列出所有环境 |
+| `activate_environment` | 切换当前激活的环境 |
+
+### 使用示例
+
+在 Claude Code 中尝试以下对话：
+
+| 你说 | Claude 执行 |
+|------|------------|
+| "列出我的 API 集合" | 调用 `list_collections` |
+| "向 https://api.example.com/users 发送 GET 请求" | 调用 `send_request(method="GET", url="...")` |
+| "激活 staging 环境，然后获取用户列表" | 调用 `activate_environment` 再调用 `send_request` |
+| "用 staging 环境运行 tests/user-crud.yaml" | 调用 `run_test_file` |
+| "我有哪些环境？" | 调用 `list_environments` |
+
+### CLI 备用方式（无 MCP）
+
+如果尚未构建 pulse-mcp，Claude Code 仍可通过 shell 命令使用 Pulse：
+
+```bash
+! pulse request -m GET https://api.example.com/users
+! pulse test tests/user-crud.yaml
+! pulse collections list --json
+```
+
+但 MCP 体验更优——Claude 能看见工具签名、参数描述，并自动填充默认值。**建议完成 MCP 配置。**
+
+### 卸载
+
+```bash
+rm /usr/local/bin/pulse-mcp
+rm .claude/settings.local.json
+```
+
+---
+
 ## 项目结构
 
 ```
