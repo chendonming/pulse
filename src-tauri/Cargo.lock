@@ -2897,16 +2897,32 @@ name = "pulse"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "pulse-core",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+]
+
+[[package]]
+name = "pulse-cli"
+version = "0.1.0"
+dependencies = [
+ "pulse-core",
+]
+
+[[package]]
+name = "pulse-core"
+version = "0.1.0"
+dependencies = [
  "clap",
  "mime",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "serde_yaml",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
  "tokio",
 ]
 
@@ -4235,9 +4251,7 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
- "parking_lot",
  "pin-project-lite",
- "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",
