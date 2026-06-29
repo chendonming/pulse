@@ -17,6 +17,9 @@ mod io;
 // ===== Test Script 执行模块 =====
 mod test_runner;
 
+// ===== CLI 命令行界面模块（clap 参数解析 + 命令派发） =====
+pub mod cli;
+
 // ============================================================
 // 常量定义
 // ============================================================
@@ -173,7 +176,7 @@ fn now_millis() -> u64 {
  * 环境变量替换：将字符串中的 {{key}} 替换为对应的变量值
  * 例如：{{base_url}}/api/users → https://example.com/api/users
  */
-pub(crate) fn substitute_variables(input: &str, variables: &[EnvironmentVariable]) -> String {
+pub fn substitute_variables(input: &str, variables: &[EnvironmentVariable]) -> String {
     let mut result = input.to_string();
     for var in variables {
         if var.enabled {
@@ -559,6 +562,102 @@ fn save_keybindings(app: AppHandle, data: KeybindingData) -> Result<(), String> 
     let content =
         serde_json::to_string_pretty(&data).map_err(|e| format!("Failed to serialize: {}", e))?;
     std::fs::write(&file_path, content).map_err(|e| format!("Failed to write file: {}", e))?;
+    Ok(())
+}
+
+// ============================================================
+// CLI 数据辅助函数（纯 Rust，无 Tauri 依赖）
+// CLI 和 GUI 共享同一份数据文件，确保数据目录一致
+// ============================================================
+
+/**
+ * 解析数据目录路径
+ *
+ * 优先级: PULSE_DATA_DIR 环境变量 > 系统默认数据目录+/com.pulse.app
+ * 确保 CLI 和 GUI 模式读写同一份数据文件
+ */
+pub fn resolve_data_dir() -> Result<std::path::PathBuf, String> {
+    if let Ok(dir) = std::env::var("PULSE_DATA_DIR") {
+        return Ok(std::path::PathBuf::from(dir));
+    }
+
+    #[cfg(target_os = "windows")]
+    let base = {
+        let app_data = std::env::var("APPDATA")
+            .map_err(|_| "无法获取 APPDATA 环境变量".to_string())?;
+        std::path::PathBuf::from(app_data)
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let base = {
+        let home = std::env::var("HOME")
+            .map_err(|_| "无法获取 HOME 环境变量".to_string())?;
+        std::path::PathBuf::from(home).join(".local/share")
+    };
+
+    Ok(base.join("com.pulse.app"))
+}
+
+/** 从数据目录加载 collections.json（文件不存在时返回空集合） */
+pub fn load_collections_data(data_dir: &std::path::Path) -> serde_json::Value {
+    let file_path = data_dir.join("collections.json");
+    if !file_path.exists() {
+        return serde_json::Value::Null;
+    }
+    match std::fs::read_to_string(&file_path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or(serde_json::Value::Null),
+        Err(_) => serde_json::Value::Null,
+    }
+}
+
+/** 从数据目录加载 environments.json（文件不存在时返回空环境） */
+pub fn load_environments_data(data_dir: &std::path::Path) -> EnvironmentData {
+    let file_path = data_dir.join("environments.json");
+    if !file_path.exists() {
+        return EnvironmentData {
+            environments: vec![],
+            active_id: None,
+        };
+    }
+    match std::fs::read_to_string(&file_path) {
+        Ok(content) => {
+            serde_json::from_str(&content).unwrap_or(EnvironmentData {
+                environments: vec![],
+                active_id: None,
+            })
+        }
+        Err(_) => EnvironmentData {
+            environments: vec![],
+            active_id: None,
+        },
+    }
+}
+
+/** 将集合数据持久化到 collections.json */
+pub fn save_collections_data(
+    data_dir: &std::path::Path,
+    data: &serde_json::Value,
+) -> Result<(), String> {
+    std::fs::create_dir_all(data_dir)
+        .map_err(|e| format!("无法创建数据目录: {}", e))?;
+    let file_path = data_dir.join("collections.json");
+    let content =
+        serde_json::to_string_pretty(data).map_err(|e| format!("序列化失败: {}", e))?;
+    std::fs::write(&file_path, content).map_err(|e| format!("写入文件失败: {}", e))?;
+    Ok(())
+}
+
+/** 将环境数据持久化到 environments.json */
+pub fn save_environments_data(
+    data_dir: &std::path::Path,
+    data: &EnvironmentData,
+) -> Result<(), String> {
+    std::fs::create_dir_all(data_dir)
+        .map_err(|e| format!("无法创建数据目录: {}", e))?;
+    let file_path = data_dir.join("environments.json");
+    let content =
+        serde_json::to_string_pretty(data).map_err(|e| format!("序列化失败: {}", e))?;
+    std::fs::write(&file_path, content).map_err(|e| format!("写入文件失败: {}", e))?;
     Ok(())
 }
 
@@ -965,4 +1064,22 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/**
+ * CLI 模式入口
+ *
+ * 当 main.rs 检测到命令行参数时调用此函数。
+ * 委托给 cli 模块解析参数并执行相应命令。
+ * 退出码: 0=成功, 1=运行时错误
+ */
+pub fn cli_run() {
+    let result = cli::run();
+    match result {
+        Ok(_) => std::process::exit(0),
+        Err(e) => {
+            eprintln!("错误: {}", e);
+            std::process::exit(1);
+        }
+    }
 }
