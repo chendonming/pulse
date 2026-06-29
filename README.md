@@ -51,36 +51,51 @@ Pulse is a cross-platform desktop application for crafting HTTP requests, inspec
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│                  React UI                       │
-│  (Vite + TypeScript + Tailwind CSS 3.4)         │
-│                                                 │
-│  invoke("send_request", payload)                │
-│         │                                       │
-│         ▼                                       │
-│  ┌──────────────────────────────────────────┐   │
-│  │           Tauri IPC (WebView2)           │   │
-│  └──────────────────────────────────────────┘   │
-│         │                                       │
-├─────────┼─────────────────────────────────────────┤
-│         ▼                                       │
-│  ┌──────────────────────────────────────────┐   │
-│  │        Rust Backend (src-tauri/)         │   │
-│  │                                          │   │
-│  │  • send_request — HTTP via reqwest       │   │
-│  │  • {{variable}} substitution engine      │   │
-│  │  • Collection & environment persistence  │   │
-│  │  • Log store with Tauri event emission   │   │
-│  └──────────────────────────────────────────┘   │
-│         │                                       │
-│         ▼                                       │
-│  ┌──────────────────────────────────────────┐   │
-│  │      Target API (external HTTP server)   │   │
-│  └──────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────┘
+                        ┌──────────────────────────────────────────┐
+                        │           React UI (WebView)             │
+                        │  Vite + TypeScript + Tailwind CSS 3.4    │
+                        │                                          │
+                        │  invoke("send_request", payload)         │
+                        └────────────────┬─────────────────────────┘
+                                         │ Tauri IPC
+                                         ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  ┌────────────────────────────────────────────────────────────┐   │
+│  │   Tauri GUI (pulse.exe)                                    │   │
+│  │   • Tauri commands (send_request, load/save, etc.)        │   │
+│  │   • LogStore (in-memory request history)                  │   │
+│  │   • Dual-mode entry: args → CLI, else → GUI               │   │
+│  └────────────────────────┬───────────────────────────────────┘   │
+│                           │ depends on                             │
+│  ┌────────────────────────▼───────────────────────────────────┐   │
+│  │   pulse-core (Shared Library, no Tauri dependency)          │   │
+│  │                                                             │   │
+│  │   ┌──────────┐  ┌──────────┐  ┌────────────────┐          │   │
+│  │   │ Types    │  │ HTTP     │  │ Variable       │          │   │
+│  │   │ (structs)│  │ Execution│  │ Substitution   │          │   │
+│  │   └──────────┘  └──────────┘  └────────────────┘          │   │
+│  │   ┌──────────┐  ┌──────────┐  ┌────────────────┐          │   │
+│  │   │ I/O     │  │ Test     │  │ CLI            │          │   │
+│  │   │(Export/ │  │ Runner   │  │ (clap parsing) │          │   │
+│  │   │ Import) │  │(YAML/    │  │                │          │   │
+│  │   │         │  │Asserts)  │  │                │          │   │
+│  │   └──────────┘  └──────────┘  └────────────────┘          │   │
+│  └────────────────────────────────────────────────────────────┘   │
+│                           │ depends on                             │
+│  ┌────────────────────────▼───────────────────────────────────┐   │
+│  │   pulse-cli (Standalone Binary, ~4 MB)                     │   │
+│  │   Thin entry point: pulse_core::cli::run()                 │   │
+│  │   Built via: npm run cli:build                             │   │
+│  └────────────────────────────────────────────────────────────┘   │
+│                           │                                       │
+│                           ▼                                       │
+│                   Target API (external HTTP server)                │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-All HTTP requests execute in the Rust backend via Tauri commands, which avoids CORS restrictions. The frontend never calls `fetch()` directly — it uses `invoke()` from `@tauri-apps/api/core` to call the `send_request` Rust function.
+All HTTP requests execute in the Rust backend, avoiding CORS restrictions. The frontend never calls `fetch()` directly — it uses `invoke()` from `@tauri-apps/api/core`.
+
+The **`pulse-core` library** encapsulates all shared business logic with zero Tauri dependencies, enabling the CLI to be built independently in seconds. The **`pulse-cli` binary** is a thin wrapper (20 lines) around `pulse_core::cli::run()`. The **Tauri binary** (`pulse.exe`) re-exports `pulse-core` types and functions for backward-compatible dual-mode dispatch.
 
 ### Tech Stack
 
@@ -89,7 +104,8 @@ All HTTP requests execute in the Rust backend via Tauri commands, which avoids C
 | **Desktop Shell** | [Tauri v2](https://v2.tauri.app/) (WebView2 on Windows) |
 | **Frontend** | React 18 + TypeScript + Vite 6 |
 | **Styling** | Tailwind CSS 3.4 with custom `pulse-*` design tokens |
-| **Backend** | Rust with [reqwest](https://docs.rs/reqwest/) 0.12 |
+| **Backend (Shared)** | Rust — `pulse-core` library (reqwest 0.12, clap, serde) |
+| **CLI** | Standalone binary — `pulse-cli` (no Tauri dependency) |
 | **IPC** | `@tauri-apps/api` (invoke / event system) |
 | **Persistence** | JSON files in the OS app data directory |
 
@@ -125,6 +141,52 @@ npx tsc --noEmit
 # Production build
 npm run build                # Frontend only
 npm run tauri build           # Full Tauri desktop build (.msi/.exe)
+
+# Standalone CLI build (no Tauri dependency, ~4 MB release binary)
+npm run cli:build             # Debug build
+npm run cli:build:release     # Optimized release build
+```
+
+### CLI Mode
+
+Pulse exposes a feature-rich command-line interface that can be built independently of the desktop app:
+
+```bash
+# Run CLI commands via npm
+npm run cli:run -- request GET https://api.example.com/users
+npm run cli:run -- env list
+npm run cli:run -- collections list --json
+npm run cli:run -- export -f yaml -o ./backup.yaml
+npm run cli:run -- import ./backup.yaml
+```
+
+Or directly, after building:
+
+```bash
+./src-tauri/target/release/pulse-cli.exe --help
+```
+
+#### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `request <url>` | Send an HTTP request and print the response |
+| `test <path>` | Run a YAML test script with assertions |
+| `collections list` | List all saved collections |
+| `env list` | List all environments |
+| `env use <name>` | Activate an environment |
+| `export` | Export collections/environments to JSON or YAML |
+| `import <path>` | Import data from a JSON/YAML file |
+
+Flags: `--json` on any command outputs machine-readable JSON. `--env <name>` on `request`/`test` selects an environment for `{{variable}}` interpolation.
+
+### Tauri Binary (Dual-Mode)
+
+The Tauri-built `pulse.exe` retains backward-compatible dual-mode: run with arguments for CLI mode, without arguments to launch the GUI.
+
+```bash
+./src-tauri/target/release/pulse.exe                      # → GUI mode
+./src-tauri/target/release/pulse.exe request GET ...       # → CLI mode
 ```
 
 ### Rust Commands
@@ -132,7 +194,8 @@ npm run tauri build           # Full Tauri desktop build (.msi/.exe)
 ```bash
 cd src-tauri
 cargo check        # Fast compilation check
-cargo build        # Debug build
+cargo build        # Debug build (all workspace members)
+cargo build -p pulse-cli    # Build only the standalone CLI
 cargo test         # Run Rust tests
 ```
 
@@ -157,11 +220,24 @@ pulse/
 │       ├── Sidebar.tsx           # Collections list, history, environment management
 │       ├── AuthPanel.tsx         # Authentication configuration
 │       └── EnvironmentPanel.tsx  # Environment variable editor
-├── src-tauri/                    # Rust backend
+├── src-tauri/                    # Rust backend (Cargo workspace)
+│   ├── pulse-core/               # Shared library (no Tauri dependency)
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── lib.rs            # Types, HTTP execution, variable substitution, persistence
+│   │       ├── cli.rs            # CLI argument parsing and command handlers
+│   │       ├── io.rs             # Import/export (JSON, YAML)
+│   │       └── test_runner.rs    # YAML test script engine
+│   ├── pulse-cli/                # Standalone CLI binary (~4 MB release)
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       └── main.rs           # CLI entry point (thin wrapper around pulse-core)
 │   ├── src/
-│   │   └── lib.rs                # Tauri commands, request execution, persistence
+│   │   ├── lib.rs                # Tauri commands, log store, GUI entry
+│   │   ├── main.rs               # Dual-mode entry: CLI args → CLI mode, else GUI
+│   │   └── mock_server.rs        # Optional mock HTTP server (feature-gated)
 │   ├── tauri.conf.json           # Tauri application configuration
-│   └── Cargo.toml                # Rust dependencies
+│   └── Cargo.toml                # Workspace root + Tauri GUI package
 ├── tailwind.config.ts            # Custom color tokens and design system
 ├── package.json
 └── vite.config.ts
@@ -184,6 +260,31 @@ Pulse uses a custom dark-themed palette defined via Tailwind CSS. All UI compone
 | `border-pulse-border` | Borders and dividers |
 | `bg-pulse-accent` / `text-pulse-accent` | Amber/gold accent |
 | `text-method-{get,post,put,patch,delete}` | Per-HTTP-method semantic colors |
+
+---
+
+## Roadmap
+
+### short-term
+
+- [ ] **cURL export** — generate cURL command strings from composed requests
+- [ ] **Multi-tab interface** — switch between multiple requests in the same window
+- [ ] **request history persistence** — save history across app restarts
+
+### Mid-term
+
+- [ ] **GraphQL support** — query builder and schema introspection
+- [ ] **WebSocket client** — real-time message send/receive panel
+- [ ] **Plugin system** — custom middleware for request/response pipelines
+
+### Claude Code / LLM Integration
+
+- [x] **Independent CLI binary** — `pulse-cli` can be built and distributed standalone (no Tauri/GUI dependency)
+- [ ] **Structured JSON output** — all CLI commands support `--json` for machine consumption (已实现)
+- [ ] **MCP tool wrapping** — expose pulse-cli as a [Model Context Protocol](https://modelcontextprotocol.io/) tool so Claude Code and other LLM agents can send HTTP requests, run tests, and manage collections directly from conversation
+- [ ] **Schema-driven request generation** — given an OpenAPI/Swagger spec, auto-generate collections and test scripts
+
+The independent `pulse-core` library and `--json` output mode lay the groundwork for LLM-native API testing — where an AI agent invokes pulse-cli as a tool to make live HTTP requests, validate responses, and maintain collections without a GUI.
 
 ---
 
