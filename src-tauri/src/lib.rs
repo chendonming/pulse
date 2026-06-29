@@ -284,8 +284,11 @@ pub struct KeybindingData {
  */
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SettingsData {
+    #[serde(rename = "zoomLevel", alias = "zoom_level")]
     pub zoom_level: f64,
+    #[serde(rename = "fontFamily", alias = "font_family")]
     pub font_family: String,
+    #[serde(rename = "fontSize", alias = "font_size")]
     pub font_size: String,
 }
 
