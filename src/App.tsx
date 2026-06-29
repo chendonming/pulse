@@ -20,6 +20,7 @@ import {
   Panel,
   Group as PanelGroup,
   Separator as PanelResizeHandle,
+  useGroupRef,
   type Layout,
 } from "react-resizable-panels";
 
@@ -45,24 +46,61 @@ export default function App() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [flashCommand, setFlashCommand] = useState<string | null>(null);
 
+  // 使用 ref 追踪最新设置值，解决闭包和竞态问题
+  const latestSettingsRef = useRef(state.settings);
+  // settingsLoaded 也通过 ref 同步
+  const settingsLoadedRef = useRef(state.settingsLoaded);
+  useEffect(() => {
+    latestSettingsRef.current = state.settings;
+  }, [state.settings]);
+  useEffect(() => {
+    settingsLoadedRef.current = state.settingsLoaded;
+  }, [state.settingsLoaded]);
+
+  /**
+   * 直接保存设置到 Rust（绕过 300ms 防抖）。
+   * onLayoutChanged 只在拖拽释放时触发，库自身已防抖。
+   * 使用 ref 确保总是获取最新值，避免 useCallback 闭包问题。
+   */
+  const saveSettingsDirectly = useCallback((partial: Partial<{
+    sidebarWidth: number;
+    requestPanelHeight: number;
+  }>) => {
+    if (!settingsLoadedRef.current) return;
+    const current = latestSettingsRef.current;
+    invoke("save_settings", {
+      data: {
+        zoomLevel: current.zoomLevel,
+        fontFamily: current.fontFamily,
+        fontSize: current.fontSize,
+        sidebarWidth: partial.sidebarWidth ?? current.sidebarWidth ?? 18,
+        requestPanelHeight: partial.requestPanelHeight ?? current.requestPanelHeight ?? 35,
+      },
+    }).catch(() => {});
+  }, []);
+
   // 水平布局变化时持久化侧边栏宽度
   const onHorizontalLayoutChanged = useCallback(
     (layout: Layout) => {
       if (layout["sidebar-panel"]) {
-        state.updateSettings({ sidebarWidth: layout["sidebar-panel"] });
+        const val = layout["sidebar-panel"];
+        state.updateSettings({ sidebarWidth: val });
+        saveSettingsDirectly({ sidebarWidth: val });
       }
     },
-    [state.updateSettings],
+    [state.updateSettings, saveSettingsDirectly],
   );
 
   // 垂直布局变化时持久化请求面板高度
   const onVerticalLayoutChanged = useCallback(
     (layout: Layout) => {
       if (layout["request-panel"]) {
-        state.updateSettings({ requestPanelHeight: layout["request-panel"] });
+        const val = layout["request-panel"];
+        state.updateSettings({ requestPanelHeight: val });
+        saveSettingsDirectly({ requestPanelHeight: val });
       }
     },
-    [state.updateSettings],
+    [state.updateSettings, saveSettingsDirectly],
   );
 
   // 智能加载：如果请求已在一个标签页中打开，切换到该标签页而非重复加载
@@ -226,6 +264,33 @@ export default function App() {
     }));
   }, []);
 
+  // ── PanelGroup 引用：用于设置加载完成后更新布局 ──
+  const horizontalGroupRef = useGroupRef();
+  const verticalGroupRef = useGroupRef();
+
+  /** 设置加载完成后，将持久化的布局值应用到 PanelGroup */
+  useEffect(() => {
+    if (!state.settingsLoaded) return;
+    // requestAnimationFrame 确保 PanelGroup 已完成布局计算
+    const raf = requestAnimationFrame(() => {
+      if (state.settings.sidebarWidth !== undefined) {
+        horizontalGroupRef.current?.setLayout({
+          "sidebar-panel": state.settings.sidebarWidth,
+          "main-panel": 100 - state.settings.sidebarWidth,
+        });
+      }
+      if (state.settings.requestPanelHeight !== undefined) {
+        verticalGroupRef.current?.setLayout({
+          "request-panel": state.settings.requestPanelHeight,
+          "response-panel": 100 - state.settings.requestPanelHeight,
+        });
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+    // 只在 settingsLoaded 首次变为 true 时执行一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.settingsLoaded]);
+
   return (
     <div
       className="h-screen flex overflow-hidden bg-pulse-deepest"
@@ -242,6 +307,7 @@ export default function App() {
         }}
         onLayoutChanged={onHorizontalLayoutChanged}
         className="flex-1 min-w-0"
+        groupRef={horizontalGroupRef}
       >
         {/* ── 侧边栏（可水平拖拽调整宽度） ── */}
         <Panel
@@ -312,6 +378,7 @@ export default function App() {
               }}
               onLayoutChanged={onVerticalLayoutChanged}
               className="flex-1 min-h-0"
+              groupRef={verticalGroupRef}
             >
               <Panel
                 id="request-panel"
