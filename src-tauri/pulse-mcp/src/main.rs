@@ -15,7 +15,8 @@
 
 use pulse_core::{
     analyze_response, execute_http_request, load_collections_data, load_environments_data,
-    resolve_data_dir, save_environments_data, EnvironmentVariable, HeaderInput, RequestInput,
+    resolve_data_dir, save_environments_data, test_runner::test_script_to_yaml,
+    EnvironmentVariable, HeaderInput, RequestInput,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -245,6 +246,56 @@ impl ToolRegistry {
                 "required": ["name"]
             }),
             handle_activate_environment,
+        );
+
+        self.register(
+            "create_test_script",
+            "创建 YAML 格式的测试脚本文件，支持指定名称、描述、变量和请求列表，自动生成合法的 YAML 并保存到指定路径",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "测试脚本文件保存路径（必填）" },
+                    "name": { "type": "string", "description": "测试脚本名称（必填）" },
+                    "description": { "type": "string", "description": "测试脚本描述（可选）" },
+                    "variables": {
+                        "type": "object",
+                        "description": "脚本级变量键值对（可选），如 {\"base_url\": \"http://localhost:8080\"}",
+                        "additionalProperties": { "type": "string" }
+                    },
+                    "requests": {
+                        "type": "array",
+                        "description": "请求定义列表（必填，至少一个请求）",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": { "type": "string", "description": "请求步骤名称（必填）" },
+                                "method": {
+                                    "type": "string",
+                                    "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+                                    "description": "HTTP 方法（必填）"
+                                },
+                                "url": { "type": "string", "description": "请求 URL，支持 {{variable}} 插值（必填）" },
+                                "headers": {
+                                    "type": "object",
+                                    "description": "请求头键值对（可选）",
+                                    "additionalProperties": { "type": "string" }
+                                },
+                                "body": { "type": "string", "description": "请求体字符串（可选）" },
+                                "content_type": { "type": "string", "description": "Content-Type（可选）" },
+                                "assertions": {
+                                    "type": "array",
+                                    "items": { "type": "string" },
+                                    "description": "断言表达式列表，如 [\"status == 200\", \"body.success == true\"]"
+                                },
+                                "skip": { "type": "boolean", "description": "设为 true 可临时跳过此请求" }
+                            },
+                            "required": ["name", "method", "url"]
+                        }
+                    }
+                },
+                "required": ["path", "name", "requests"]
+            }),
+            handle_create_test_script,
         );
     }
 
@@ -528,6 +579,101 @@ fn handle_activate_environment(args: &HashMap<String, serde_json::Value>) -> Mcp
             }
         }
         None => error_result(&format!("未找到名为 '{}' 的环境", name)),
+    }
+}
+
+/** 处理 create_test_script 工具 */
+fn handle_create_test_script(args: &HashMap<String, serde_json::Value>) -> McpToolResult {
+    let path = match get_str(args, "path") {
+        Some(p) => p,
+        None => return error_result("缺少必填参数: path"),
+    };
+    let name = match get_str(args, "name") {
+        Some(n) => n,
+        None => return error_result("缺少必填参数: name"),
+    };
+    let description = get_str(args, "description");
+
+    // 解析脚本级变量
+    let variables = args.get("variables").and_then(|v| v.as_object()).map(|obj| {
+        obj.iter().map(|(k, v)| {
+            (k.clone(), v.as_str().unwrap_or("").to_string())
+        }).collect()
+    });
+
+    // 解析请求列表
+    let requests = match args.get("requests").and_then(|r| r.as_array()) {
+        Some(arr) if arr.is_empty() => return error_result("requests 不能为空数组"),
+        Some(arr) => {
+            let mut result = Vec::new();
+            for (i, item) in arr.iter().enumerate() {
+                let obj = match item.as_object() {
+                    Some(o) => o,
+                    None => return error_result(&format!("requests[{}] 必须是一个对象", i)),
+                };
+                let r_name = match obj.get("name").and_then(|v| v.as_str()) {
+                    Some(n) => n.to_string(),
+                    None => return error_result(&format!("requests[{}] 缺少必填字段: name", i)),
+                };
+                let method = match obj.get("method").and_then(|v| v.as_str()) {
+                    Some(m) => m.to_string(),
+                    None => return error_result(&format!("requests[{}] 缺少必填字段: method", i)),
+                };
+                let url = match obj.get("url").and_then(|v| v.as_str()) {
+                    Some(u) => u.to_string(),
+                    None => return error_result(&format!("requests[{}] 缺少必填字段: url", i)),
+                };
+                let headers = obj.get("headers").and_then(|v| v.as_object()).map(|h| {
+                    h.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string())).collect()
+                });
+                let body = obj.get("body").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let content_type = obj.get("content_type").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let assertions = obj.get("assertions").and_then(|v| v.as_array())
+                    .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                    .unwrap_or_default();
+                let skip = obj.get("skip").and_then(|v| v.as_bool());
+
+                result.push(pulse_core::test_runner::TestRequest {
+                    name: r_name,
+                    method,
+                    url,
+                    headers,
+                    body,
+                    content_type,
+                    assertions,
+                    skip,
+                });
+            }
+            result
+        }
+        None => return error_result("缺少必填参数: requests"),
+    };
+
+    let script = pulse_core::test_runner::TestScript {
+        name,
+        description,
+        variables,
+        requests,
+    };
+
+    // 序列化为 YAML
+    let yaml = match test_script_to_yaml(&script) {
+        Ok(y) => y,
+        Err(e) => return error_result(&e),
+    };
+
+    // 确保目标目录存在
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    // 写入文件（静默覆盖已有文件）
+    match std::fs::write(&path, &yaml) {
+        Ok(_) => text_result(&format!(
+            "测试脚本已成功创建\n路径: {}\n名称: {}\n请求数: {}",
+            path, script.name, script.requests.len()
+        )),
+        Err(e) => error_result(&format!("写入文件失败 '{}': {}", path, e)),
     }
 }
 

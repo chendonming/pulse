@@ -18,14 +18,14 @@ use crate::{
 // ============================================================
 
 /** YAML 测试脚本顶层结构 */
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TestScript {
     /** 脚本名称（用于结果展示） */
     pub name: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /** 脚本级变量，用于 {{key}} 模板替换，优先级高于激活环境 */
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variables: Option<HashMap<String, String>>,
     /** 内联请求定义列表 */
     #[serde(default)]
@@ -33,7 +33,7 @@ pub struct TestScript {
 }
 
 /** 测试脚本中的单个请求定义 */
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TestRequest {
     /** 步骤显示名称 */
     pub name: String,
@@ -42,19 +42,19 @@ pub struct TestRequest {
     /** 请求 URL（支持 {{variable}} 插值） */
     pub url: String,
     /** 请求头键值对 */
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub headers: Option<HashMap<String, String>>,
     /** 请求体（null 表示无体） */
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body: Option<String>,
     /** Content-Type */
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_type: Option<String>,
     /** 断言表达式列表，例如 "status == 200" 或 "body.success == true" */
     #[serde(default)]
     pub assertions: Vec<String>,
     /** 设为 true 可临时跳过此请求 */
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub skip: Option<bool>,
 }
 
@@ -113,6 +113,12 @@ pub struct AssertionResult {
 pub fn parse_test_script(yaml: &str) -> Result<TestScript, String> {
     serde_yaml::from_str::<TestScript>(yaml)
         .map_err(|e| format!("YAML 解析失败: {}", e))
+}
+
+/** 将 TestScript 序列化为 YAML 字符串 */
+pub fn test_script_to_yaml(script: &TestScript) -> Result<String, String> {
+    serde_yaml::to_string(script)
+        .map_err(|e| format!("YAML 序列化失败: {}", e))
 }
 
 // ============================================================
