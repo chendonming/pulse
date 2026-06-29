@@ -111,12 +111,15 @@ function SortableColHeader({
   name,
   count,
   colorClass,
+  onDelete,
 }: {
   id: string;
   name: string;
   count: number;
   /** 集合色标指示点的 Tailwind 背景色 class（循环调色板） */
   colorClass: string;
+  /** 删除集合 */
+  onDelete: () => void;
 }) {
   const {
     attributes,
@@ -140,7 +143,7 @@ function SortableColHeader({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold text-pulse-text-secondary uppercase tracking-wider select-none"
+      className="group flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold text-pulse-text-secondary uppercase tracking-wider select-none"
     >
       {/* 集合色标指示点 —— 循环调色板，快速区分不同集合 */}
       <span className={`w-2 h-2 rounded-full shrink-0 ${colorClass}`} />
@@ -162,6 +165,20 @@ function SortableColHeader({
           {count}
         </span>
       )}
+      {/* 删除集合按钮（悬停时显示） */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        className="w-5 h-5 flex items-center justify-center rounded text-pulse-text-muted/40 hover:text-pulse-rose hover:bg-pulse-hover transition-all opacity-0 group-hover:opacity-100"
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+          />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -305,6 +322,8 @@ interface SidebarProps {
   onDeleteRequest: (collectionId: string, requestId: string) => void;
   onRenameRequest: (collectionId: string, requestId: string) => void;
   onAddCollection: () => void;
+  /** 删除整个集合 */
+  onDeleteCollection: (collectionId: string) => void;
   onUpdateCollectionAuth: (
     collectionId: string,
     authType: AuthType,
@@ -359,6 +378,7 @@ export default memo(function Sidebar({
   onDeleteRequest,
   onRenameRequest,
   onAddCollection,
+  onDeleteCollection,
   onUpdateCollectionAuth,
   onMoveRequest,
   onMoveCollection,
@@ -594,6 +614,7 @@ export default memo(function Sidebar({
                               name={col.name}
                               count={col.requests.length}
                               colorClass={colorClass}
+                              onDelete={() => onDeleteCollection(col.id)}
                             />
 
                             {/* 集合 Base URL 输入 */}

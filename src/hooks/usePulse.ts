@@ -266,10 +266,14 @@ export function usePulse() {
 
   /** 撤销删除栈（最多保存 30 秒内的操作） */
   const undoStack = useRef<Array<{
-    type: "deleteRequest";
-    collectionId: string;
-    requestIndex: number;
-    request: RequestItem;
+    type: "deleteRequest" | "deleteCollection";
+    collectionId?: string;
+    requestIndex?: number;
+    request?: RequestItem;
+    /** 被删除的集合的快照 */
+    collection?: Collection;
+    /** 集合在列表中的原始索引 */
+    collectionIndex?: number;
     timestamp: number;
   }>>([]);
 
@@ -319,6 +323,42 @@ export function usePulse() {
         duration: 5000,
         action: { label: "Undo", onClick: undoLastDelete },
       });
+    } else if (confirmDialog.type === "deleteCollection") {
+      const { collectionId, collectionName } = confirmDialog;
+      // 找到被删除集合及其索引
+      const colIndex = collections.findIndex((c) => c.id === collectionId);
+      const deletedCol = colIndex >= 0 ? collections[colIndex] : null;
+
+      if (!deletedCol) {
+        setConfirmDialog(null);
+        return;
+      }
+
+      // 从集合列表中移除
+      setCollections((prev) => prev.filter((c) => c.id !== collectionId));
+
+      // 如果正在编辑该集合中的请求，清除编辑状态
+      if (editingRequest?.collectionId === collectionId) {
+        setEditingRequest(null);
+      }
+
+      // 推入撤销栈
+      undoStack.current.push({
+        type: "deleteCollection",
+        collectionIndex: colIndex,
+        collection: deletedCol,
+        timestamp: Date.now(),
+      });
+      const now = Date.now();
+      undoStack.current = undoStack.current.filter((e) => now - e.timestamp < 30000);
+
+      // 弹出含撤销按钮的 Toast
+      addToast({
+        type: "info",
+        message: `Deleted collection "${collectionName ?? deletedCol.name}"`,
+        duration: 5000,
+        action: { label: "Undo", onClick: undoLastDelete },
+      });
     }
     setConfirmDialog(null);
   }, [confirmDialog, collections, editingRequest, addToast]);
@@ -332,16 +372,23 @@ export function usePulse() {
   const undoLastDelete = useCallback(() => {
     const entry = undoStack.current.pop();
     if (!entry) return;
-    if (entry.type === "deleteRequest") {
+    if (entry.type === "deleteRequest" && entry.collectionId && entry.request) {
       setCollections((prev) =>
         prev.map((c) => {
           if (c.id !== entry.collectionId) return c;
           const newRequests = [...c.requests];
-          newRequests.splice(entry.requestIndex, 0, entry.request);
+          newRequests.splice(entry.requestIndex ?? 0, 0, entry.request!);
           return { ...c, requests: newRequests };
         }),
       );
       addToast({ type: "success", message: `"${entry.request.name}" restored` });
+    } else if (entry.type === "deleteCollection" && entry.collection) {
+      setCollections((prev) => {
+        const newCols = [...prev];
+        newCols.splice(entry.collectionIndex ?? prev.length, 0, entry.collection!);
+        return newCols;
+      });
+      addToast({ type: "success", message: `"${entry.collection.name}" restored` });
     }
   }, [addToast]);
 
@@ -896,6 +943,20 @@ export function usePulse() {
     setCollections((prev) => [...prev, newCol]);
   }, [collections.length]);
 
+  /** 删除集合（弹出确认对话框） */
+  const deleteCollection = useCallback(
+    (collectionId: string) => {
+      const col = collections.find((c) => c.id === collectionId);
+      if (!col) return;
+      setConfirmDialog({
+        type: "deleteCollection",
+        collectionId,
+        collectionName: col.name,
+      });
+    },
+    [collections],
+  );
+
   /** 更新集合的认证配置（类型 + Token） */
   const updateCollectionAuth = useCallback(
     (collectionId: string, authType: AuthType, bearerToken: string) => {
@@ -1166,10 +1227,14 @@ export function usePulse() {
   /**
    * 执行导出
    * @param format "json" | "yaml"
+   * @param collectionIds 需要导出的 Collection ID 列表（空数组 = 导出全部）
    */
-  const handleExport = useCallback(async (format: string) => {
+  const handleExport = useCallback(async (format: string, collectionIds: string[]) => {
     try {
-      const fileName = await invoke<string | null>("export_data_to_file", { format });
+      const fileName = await invoke<string | null>("export_data_to_file", {
+        format,
+        collectionIds,
+      });
       if (!fileName) return; // 用户取消保存对话框
 
       addToast({
@@ -1235,6 +1300,7 @@ export function usePulse() {
     deleteCollectionRequest,
     renameCollectionRequest,
     addCollection,
+    deleteCollection,
     updateCollectionAuth,
     updateCollectionBaseUrl,
     moveRequest,

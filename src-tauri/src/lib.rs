@@ -548,18 +548,19 @@ fn save_keybindings(app: AppHandle, data: KeybindingData) -> Result<(), String> 
 // ============================================================
 
 /**
- * export_data_to_file：导出所有数据到文件
+ * export_data_to_file：导出数据到文件（支持按 Collection ID 筛选）
  *
  * 1. 从 app_data_dir 读取集合和环境数据
- * 2. 构建 ExportData 信封
- * 3. 序列化为 JSON 或 YAML
- * 4. 弹出原生保存对话框
- * 5. 写入文件
+ * 2. 按 collection_ids 筛选（空数组 = 导出全部）
+ * 3. 构建 ExportData 信封
+ * 4. 序列化为 JSON 或 YAML
+ * 5. 弹出原生保存对话框
+ * 6. 写入文件
  *
  * 返回保存的文件名（用户取消时返回 None）
  */
 #[tauri::command]
-async fn export_data_to_file(app: AppHandle, format: String) -> Result<Option<String>, String> {
+async fn export_data_to_file(app: AppHandle, format: String, collection_ids: Vec<String>) -> Result<Option<String>, String> {
     let export_fmt = io::ExportFormat::from_str(&format)?;
 
     // 读取集合数据
@@ -575,6 +576,30 @@ async fn export_data_to_file(app: AppHandle, format: String) -> Result<Option<St
         serde_json::from_str(&content).unwrap_or(serde_json::Value::Null)
     } else {
         serde_json::Value::Null
+    };
+
+    // 按 collection_ids 筛选集合
+    let filtered_collections = if collection_ids.is_empty() {
+        // 空数组 = 导出全部，不做筛选
+        collections
+    } else {
+        // 仅保留 ID 在 collection_ids 中的集合
+        let items = collections
+            .get("collections")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter(|item| {
+                        item.get("id")
+                            .and_then(|id| id.as_str())
+                            .map(|id| collection_ids.contains(&id.to_string()))
+                            .unwrap_or(false)
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        serde_json::json!({ "collections": items })
     };
 
     // 读取环境数据
@@ -595,7 +620,7 @@ async fn export_data_to_file(app: AppHandle, format: String) -> Result<Option<St
 
     // 构建导出信封
     let exported_at = chrono_now_iso();
-    let export_data = io::build_export_data(&collections, &environments, &exported_at);
+    let export_data = io::build_export_data(&filtered_collections, &environments, &exported_at);
 
     // 序列化
     let content = io::serialize_export(&export_data, export_fmt)?;

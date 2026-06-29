@@ -149,6 +149,7 @@ export default function App() {
         onDeleteRequest={state.deleteCollectionRequest}
         onRenameRequest={state.renameCollectionRequest}
         onAddCollection={state.addCollection}
+        onDeleteCollection={state.deleteCollection}
         onUpdateCollectionAuth={state.updateCollectionAuth}
         onMoveRequest={state.moveRequest}
         onMoveCollection={state.moveCollection}
@@ -340,7 +341,7 @@ export default function App() {
       {/* 导出对话框 */}
       <ExportDialog
         visible={state.exportDialogVisible}
-        collectionsCount={state.collections.length}
+        collections={state.collections}
         environmentsCount={state.environments.length}
         onExport={state.handleExport}
         onCancel={state.closeExportDialog}
