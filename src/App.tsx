@@ -46,6 +46,11 @@ export default function App() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [flashCommand, setFlashCommand] = useState<string | null>(null);
 
+  // 使用 ref 解决快捷键引擎闭包陈旧性问题
+  // 避免 useEffect([]) 捕获过时的 handler 引用
+  const handlerRef = useRef(state);
+  handlerRef.current = state;
+
   // 使用 ref 追踪最新设置值，解决闭包和竞态问题
   const latestSettingsRef = useRef(state.settings);
   // settingsLoaded 也通过 ref 同步
@@ -133,14 +138,16 @@ export default function App() {
     const engine = new ShortcutEngine();
 
     // 从 usePulse 获取实际处理函数并映射到命令
+    // 通过 handlerRef 访问最新引用，避免 useEffect([]) 闭包陈旧性问题
+    const getHandlers = () => handlerRef.current;
     const commands = DEFAULT_COMMANDS.map((cmd) => {
       switch (cmd.id) {
         case "sendRequest":
-          return { ...cmd, handler: state.sendRequest };
+          return { ...cmd, handler: () => getHandlers().sendRequest() };
         case "newRequest":
-          return { ...cmd, handler: state.newTab };
+          return { ...cmd, handler: () => getHandlers().newTab() };
         case "saveRequest":
-          return { ...cmd, handler: state.saveCurrentRequest };
+          return { ...cmd, handler: () => getHandlers().saveCurrentRequest() };
         case "focusUrlBar":
           return {
             ...cmd,
@@ -148,54 +155,55 @@ export default function App() {
               document.getElementById("request-url-input")?.focus(),
           };
         case "clearResponse":
-          return { ...cmd, handler: state.clearResponse };
+          return { ...cmd, handler: () => getHandlers().clearResponse() };
         case "switchCollectionsTab":
           return {
             ...cmd,
-            handler: () => state.setSidebarTab("collections"),
+            handler: () => getHandlers().setSidebarTab("collections"),
           };
         case "switchHistoryTab":
-          return { ...cmd, handler: () => state.setSidebarTab("history") };
+          return { ...cmd, handler: () => getHandlers().setSidebarTab("history") };
         case "switchEnvironmentsTab":
           return {
             ...cmd,
-            handler: () => state.setSidebarTab("environments"),
+            handler: () => getHandlers().setSidebarTab("environments"),
           };
         case "requestTabParams":
-          return { ...cmd, handler: () => state.setRequestTab("params") };
+          return { ...cmd, handler: () => getHandlers().setRequestTab("params") };
         case "requestTabAuth":
-          return { ...cmd, handler: () => state.setRequestTab("auth") };
+          return { ...cmd, handler: () => getHandlers().setRequestTab("auth") };
         case "requestTabHeaders":
-          return { ...cmd, handler: () => state.setRequestTab("headers") };
+          return { ...cmd, handler: () => getHandlers().setRequestTab("headers") };
         case "requestTabBody":
-          return { ...cmd, handler: () => state.setRequestTab("body") };
+          return { ...cmd, handler: () => getHandlers().setRequestTab("body") };
         case "responseTabBody":
-          return { ...cmd, handler: () => state.setResponseTab("body") };
+          return { ...cmd, handler: () => getHandlers().setResponseTab("body") };
         case "responseTabHeaders":
-          return { ...cmd, handler: () => state.setResponseTab("headers") };
+          return { ...cmd, handler: () => getHandlers().setResponseTab("headers") };
         case "dialogConfirm":
-          return { ...cmd, handler: state.confirmSave };
+          return { ...cmd, handler: () => getHandlers().confirmSave() };
         case "dialogCancel":
-          return { ...cmd, handler: state.cancelSave };
+          return { ...cmd, handler: () => getHandlers().cancelSave() };
         case "openKeybindingsEditor":
           return { ...cmd, handler: () => setEditorOpen(true) };
         case "openSettings":
-          return { ...cmd, handler: () => state.openSettingsDialog() };
+          return { ...cmd, handler: () => getHandlers().openSettingsDialog() };
         case "closeTab":
           return {
             ...cmd,
-            handler: () => state.closeTab(state.activeTabId),
+            handler: () => getHandlers().closeTab(getHandlers().activeTabId),
           };
         case "nextTab": {
           return {
             ...cmd,
             handler: () => {
-              const idx = state.tabs.findIndex(
-                (t) => t.id === state.activeTabId,
+              const h = getHandlers();
+              const idx = h.tabs.findIndex(
+                (t: { id: string }) => t.id === h.activeTabId,
               );
               if (idx < 0) return;
-              const next = state.tabs[(idx + 1) % state.tabs.length];
-              state.switchTab(next.id);
+              const next = h.tabs[(idx + 1) % h.tabs.length];
+              h.switchTab(next.id);
             },
           };
         }
@@ -203,13 +211,14 @@ export default function App() {
           return {
             ...cmd,
             handler: () => {
-              const idx = state.tabs.findIndex(
-                (t) => t.id === state.activeTabId,
+              const h = getHandlers();
+              const idx = h.tabs.findIndex(
+                (t: { id: string }) => t.id === h.activeTabId,
               );
               if (idx < 0) return;
               const prev =
-                state.tabs[(idx - 1 + state.tabs.length) % state.tabs.length];
-              state.switchTab(prev.id);
+                h.tabs[(idx - 1 + h.tabs.length) % h.tabs.length];
+              h.switchTab(prev.id);
             },
           };
         }
@@ -245,7 +254,8 @@ export default function App() {
       engine.stop();
       engineRef.current = null;
     };
-    // state 的引用在组件生命周期内不变（useCallback 已稳定化）
+    // handlerRef.current 在每次渲染时更新，快捷键引擎通过 ref 调用
+    // 最新 handler，解决 useEffect([]) 的闭包陈旧性问题
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
