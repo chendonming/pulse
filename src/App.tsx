@@ -10,6 +10,7 @@ import ResponsePanel from "./components/ResponsePanel";
 import TabBar from "./components/TabBar";
 import SaveDialog from "./components/SaveDialog";
 import ConfirmDialog from "./components/ConfirmDialog";
+import PromptDialog from "./components/PromptDialog";
 import ImportDialog from "./components/ImportDialog";
 import ExportDialog from "./components/ExportDialog";
 import TestScriptDialog from "./components/TestScriptDialog";
@@ -493,6 +494,18 @@ export default function App() {
         variant="danger"
         onConfirm={state.confirmDestructive}
         onCancel={state.cancelDestructive}
+        engine={engineRef.current}
+      />
+
+      {/* 输入对话框（替代 window.prompt） */}
+      <PromptDialog
+        visible={state.promptDialog !== null}
+        title={state.promptDialog?.title ?? ""}
+        defaultValue={state.promptDialog?.defaultValue ?? ""}
+        placeholder={state.promptDialog?.placeholder ?? ""}
+        confirmLabel="Confirm"
+        onConfirm={state.confirmPrompt}
+        onCancel={state.cancelPrompt}
         engine={engineRef.current}
       />
 

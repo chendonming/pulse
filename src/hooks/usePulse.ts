@@ -787,6 +787,17 @@ export function usePulse() {
     collectionName?: string;
   } | null>(null);
 
+  // ── 输入对话框状态（替代 window.prompt）──
+
+  const [promptDialog, setPromptDialog] = useState<{
+    title: string;
+    defaultValue: string;
+    placeholder: string;
+  } | null>(null);
+
+  /** 存储 prompt 确认时的实际操作（避免将函数存入 state） */
+  const promptActionRef = useRef<((value: string) => void) | null>(null);
+
   const undoStack = useRef<Array<{
     type: "deleteRequest" | "deleteCollection";
     collectionId?: string;
@@ -884,6 +895,19 @@ export function usePulse() {
 
   const cancelDestructive = useCallback(() => {
     setConfirmDialog(null);
+  }, []);
+
+  // ── 输入对话框确认/取消 ──
+
+  const confirmPrompt = useCallback((value: string) => {
+    promptActionRef.current?.(value);
+    promptActionRef.current = null;
+    setPromptDialog(null);
+  }, []);
+
+  const cancelPrompt = useCallback(() => {
+    promptActionRef.current = null;
+    setPromptDialog(null);
   }, []);
 
   const undoLastDelete = useCallback(() => {
@@ -1360,38 +1384,50 @@ export function usePulse() {
       const col = collections.find((c) => c.id === collectionId);
       const req = col?.requests.find((r) => r.id === requestId);
       if (!req) return;
-      const name =
-        window.prompt("Rename request:", req.name) ?? "";
-      if (!name.trim()) return;
-      setCollections((prev) =>
-        prev.map((c) =>
-          c.id === collectionId
-            ? {
-                ...c,
-                requests: c.requests.map((r) =>
-                  r.id === requestId ? { ...r, name: name.trim() } : r,
-                ),
-              }
-            : c,
-        ),
-      );
+
+      // 将重命名操作存入 ref，打开对话框让用户输入新名称
+      promptActionRef.current = (value: string) => {
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        setCollections((prev) =>
+          prev.map((c) =>
+            c.id === collectionId
+              ? { ...c, requests: c.requests.map((r) => r.id === requestId ? { ...r, name: trimmed } : r) }
+              : c,
+          ),
+        );
+      };
+
+      setPromptDialog({
+        title: "Rename Request",
+        defaultValue: req.name,
+        placeholder: "Enter request name...",
+      });
     },
     [collections],
   );
 
   const addCollection = useCallback(() => {
-    const name =
-      window.prompt("Collection name:", `Collection ${collections.length + 1}`) ?? "";
-    if (!name.trim()) return;
-    const newCol: Collection = {
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      base_url: '',
-      authType: "inherit",
-      bearerToken: "",
-      requests: [],
+    // 将创建集合操作存入 ref，打开对话框让用户输入名称
+    promptActionRef.current = (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      const newCol: Collection = {
+        id: crypto.randomUUID(),
+        name: trimmed,
+        base_url: '',
+        authType: "inherit",
+        bearerToken: "",
+        requests: [],
+      };
+      setCollections((prev) => [...prev, newCol]);
     };
-    setCollections((prev) => [...prev, newCol]);
+
+    setPromptDialog({
+      title: "New Collection",
+      defaultValue: `Collection ${collections.length + 1}`,
+      placeholder: "Enter collection name...",
+    });
   }, [collections.length]);
 
   const deleteCollection = useCallback(
@@ -1871,6 +1907,10 @@ export function usePulse() {
     setSaveDialogName,
     confirmSave,
     cancelSave,
+    /* ── 输入对话框（替代 window.prompt）── */
+    promptDialog,
+    confirmPrompt,
+    cancelPrompt,
     /* ── 环境 CRUD ── */
     environments,
     activeEnvironmentId,
