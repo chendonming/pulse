@@ -299,7 +299,7 @@ pub struct KeybindingData {
 
 /**
  * 应用设置数据
- * 存储 UI 缩放、字体、字号、布局比例等偏好设置
+ * 存储 UI 缩放、字体、字号、主题、布局比例等偏好设置
  */
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SettingsData {
@@ -309,10 +309,18 @@ pub struct SettingsData {
     pub font_family: String,
     #[serde(rename = "fontSize", alias = "font_size")]
     pub font_size: String,
+    /** 主题：dark | light */
+    #[serde(rename = "theme", default = "default_theme")]
+    pub theme: String,
     #[serde(rename = "sidebarWidth", default)]
     pub sidebar_width: Option<f64>,
     #[serde(rename = "requestPanelHeight", default)]
     pub request_panel_height: Option<f64>,
+}
+
+/** 默认主题为暗色 */
+fn default_theme() -> String {
+    "dark".to_string()
 }
 
 /** 从操作系统应用数据目录加载 keybindings.json */
@@ -365,6 +373,7 @@ fn load_settings(app: AppHandle) -> Result<SettingsData, String> {
             zoom_level: 1.0,
             font_family: "inter".into(),
             font_size: "medium".into(),
+            theme: "dark".into(),
             sidebar_width: None,
             request_panel_height: None,
         });

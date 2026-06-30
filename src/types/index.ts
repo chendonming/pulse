@@ -308,6 +308,8 @@ export interface AppSettings {
   fontFamily: string;
   /** 字号标识：small | medium | large */
   fontSize: string;
+  /** 主题：暗色 / 浅色 */
+  theme: "dark" | "light";
   /** 侧边栏宽度百分比（10-35） */
   sidebarWidth?: number;
   /** 请求面板高度百分比（10-60） */
@@ -319,6 +321,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   zoomLevel: 1.0,
   fontFamily: "inter",
   fontSize: "medium",
+  theme: "dark",
   sidebarWidth: 18,
   requestPanelHeight: 35,
 };

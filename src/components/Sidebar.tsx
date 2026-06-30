@@ -399,6 +399,9 @@ interface SidebarProps {
   onOpenInNewTab?: (item: RequestItem, collectionId: string) => void;
   /* ── 打开设置面板 ── */
   onOpenSettings?: () => void;
+  /* ── 主题切换 ── */
+  theme?: "dark" | "light";
+  onToggleTheme?: () => void;
 }
 
 // ============================================================
@@ -441,6 +444,8 @@ export default memo(function Sidebar({
   onOpenInNewTab,
   onOpenSettings,
   onUpdateCollectionVariables,
+  theme,
+  onToggleTheme,
 }: SidebarProps) {
   const [expandedAuthCol, setExpandedAuthCol] = useState<string | null>(null);
   const [expandedVarsCol, setExpandedVarsCol] = useState<string | null>(null);
@@ -580,6 +585,26 @@ export default memo(function Sidebar({
         </div>
         {/* 新建请求按钮 */}
         <div className="flex items-center gap-1">
+          {/* 主题切换按钮 */}
+          {onToggleTheme && (
+            <button
+              onClick={onToggleTheme}
+              title={theme === "light" ? "Switch to Dark" : "Switch to Light"}
+              className="w-7 h-7 flex items-center justify-center rounded-md text-pulse-text-muted hover:text-pulse-text-secondary hover:bg-pulse-hover transition-colors"
+            >
+              {theme === "light" ? (
+                /* 月亮图标 —— 切换到暗色 */
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+              ) : (
+                /* 太阳图标 —— 切换到浅色 */
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              )}
+            </button>
+          )}
           {/* 设置按钮 */}
           <button
             onClick={onOpenSettings}

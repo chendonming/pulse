@@ -4,19 +4,64 @@
 
 /* ============================================================
  * Pulse 应用的全局样式
- * 基于 Tailwind CSS + 自定义暗色设计系统
  *
- * 自定义 CSS class 分三层：
- * 1. base — 全局滚动条、输入框焦点
- * 2. components — 可复用组件类（panel/btn/input/badge）
- * 3. utilities — 工具类
+ * 双主题系统：:root = 暗色主题（默认）
+ *            [data-theme="light"] = 浅色主题
  * ============================================================ */
 
 @layer base {
-  /* 自定义薄型滚动条（暗色主题） */
+  /* ── 暗色主题（默认） ── */
+  :root {
+    --pulse-deepest: #0B0D15;
+    --pulse-surface: #12141D;
+    --pulse-elevated: #1A1D28;
+    --pulse-hover: #222638;
+    --pulse-border: #2E3348;
+    --pulse-accent: #F0B429;
+    --pulse-accent-soft: #F6D055;
+    --pulse-accent-dim: #C4941F;
+    --pulse-text-primary: #E8EAF0;
+    --pulse-text-secondary: #9499B3;
+    --pulse-text-muted: #656A82;
+    --pulse-scrollbar-thumb: #2E3348;
+    --pulse-scrollbar-thumb-hover: #3E4360;
+    --pulse-overlay: rgba(0, 0, 0, 0.6);
+    --pulse-accent-a40: rgba(240, 180, 41, 0.4);
+    --pulse-accent-a50: rgba(240, 180, 41, 0.5);
+    --pulse-accent-a60: rgba(240, 180, 41, 0.6);
+    --pulse-glow-dim: rgba(240, 180, 41, 0.4);
+    --pulse-glow-bright: rgba(240, 180, 41, 1);
+    --pulse-flash-color: rgba(240, 180, 41, 0.6);
+  }
+
+  /* ── 浅色主题 ── */
+  [data-theme="light"] {
+    --pulse-deepest: #F5F6FA;
+    --pulse-surface: #EBEDF2;
+    --pulse-elevated: #E0E3EA;
+    --pulse-hover: #D5D8E2;
+    --pulse-border: #C8CBD8;
+    --pulse-accent: #D49520;
+    --pulse-accent-soft: #E8B440;
+    --pulse-accent-dim: #A67A10;
+    --pulse-text-primary: #1A1D28;
+    --pulse-text-secondary: #4E5268;
+    --pulse-text-muted: #858AA0;
+    --pulse-scrollbar-thumb: #C8CBD8;
+    --pulse-scrollbar-thumb-hover: #B0B4C4;
+    --pulse-overlay: rgba(0, 0, 0, 0.3);
+    --pulse-accent-a40: rgba(212, 149, 32, 0.4);
+    --pulse-accent-a50: rgba(212, 149, 32, 0.5);
+    --pulse-accent-a60: rgba(212, 149, 32, 0.6);
+    --pulse-glow-dim: rgba(212, 149, 32, 0.4);
+    --pulse-glow-bright: rgba(212, 149, 32, 1);
+    --pulse-flash-color: rgba(212, 149, 32, 0.6);
+  }
+
+  /* 自定义薄型滚动条（跟随主题切换） */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #2E3348 transparent;
+    scrollbar-color: var(--pulse-scrollbar-thumb) transparent;
   }
 
   *::-webkit-scrollbar {
@@ -29,12 +74,12 @@
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: #2E3348;
+    background-color: var(--pulse-scrollbar-thumb);
     border-radius: 3px;
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background-color: #3E4360;
+    background-color: var(--pulse-scrollbar-thumb-hover);
   }
 
   /* 全局移除外轮廓，使用自定义 focus ring */
@@ -47,7 +92,9 @@
   input:focus,
   textarea:focus,
   select:focus {
-    @apply ring-1 ring-pulse-accent/40 border-pulse-accent/50;
+    @apply outline-none;
+    box-shadow: 0 0 0 1px var(--pulse-accent-a40);
+    border-color: var(--pulse-accent-a50);
   }
 }
 
@@ -110,45 +157,115 @@
 
   /* 聚焦环（无障碍可访问性） */
   .focus-ring {
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pulse-accent/60 focus-visible:ring-offset-1 focus-visible:ring-offset-pulse-surface;
+    @apply focus-visible:outline-none;
+  }
+  .focus-ring:focus-visible {
+    outline: 2px solid var(--pulse-accent-a60);
+    outline-offset: 1px;
   }
 
   /* ============================================================
    * 面板拖拽分隔条
    * 用于 react-resizable-panels 的 PanelResizeHandle
+   *
+   * 设计原则：分隔条始终给出视觉提示，让用户自然发现可拖拽区域。
+   * - 水平分隔条（Sidebar ↔ 主区）：侧边栏自带 border-r 提供分界感，
+   *   悬停时 accent 高亮即可
+   * - 垂直分隔条（RequestPanel ↔ ResponsePanel）：
+   *   两个面板背景相近，必须始终显示拖拽指示器
    * ============================================================ */
 
   /* 垂直拖拽分隔条（Sidebar 和主区域之间） */
   .resize-handle-horizontal {
     position: relative;
-    width: 4px;
+    width: 6px;
     cursor: col-resize;
     background: transparent;
     transition: background 0.15s ease;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .resize-handle-horizontal:hover {
-    background: #F0B429;
+  /* 居中小圆点 grip 指示器 */
+  .resize-handle-horizontal::before {
+    content: '';
+    display: block;
+    width: 3px;
+    height: 24px;
+    border-radius: 2px;
+    background: var(--pulse-border);
+    opacity: 0;
+    transition: opacity 0.2s ease, background 0.15s ease;
+  }
+  .resize-handle-horizontal:hover::before,
+  .resize-handle-horizontal[data-resize-handle-active]::before {
+    opacity: 0.5;
+  }
+  .resize-handle-horizontal:hover,
+  .resize-handle-horizontal[data-resize-handle-active] {
+    background: transparent;
+  }
+  .resize-handle-horizontal:hover::before,
+  .resize-handle-horizontal[data-resize-handle-active]::before {
+    background: var(--pulse-accent);
+    opacity: 1;
   }
 
   /* 水平拖拽分隔条（RequestPanel 和 ResponsePanel 之间） */
   .resize-handle-vertical {
     position: relative;
-    height: 4px;
+    height: 8px;
     cursor: row-resize;
     background: transparent;
     transition: background 0.15s ease;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .resize-handle-vertical:hover {
-    background: #F0B429;
+  /* 始终可见的 grip 指示条：一段带圆角的小横杠，居中显示 */
+  .resize-handle-vertical::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--pulse-border);
+    opacity: 0.35;
+    transition: opacity 0.2s ease, background 0.15s ease, width 0.15s ease;
+    z-index: 1;
+  }
+  .resize-handle-vertical:hover::before,
+  .resize-handle-vertical[data-resize-handle-active]::before {
+    width: 56px;
+    height: 3px;
+    opacity: 1;
+    background: var(--pulse-accent);
+  }
+  /* 分隔线：底边一条极细线，从上方面板底部延伸到 handle 底部，
+     始终可见，赋予"有东西在这里分隔"的心理暗示 */
+  .resize-handle-vertical::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: var(--pulse-border);
+    opacity: 0.25;
+    transition: opacity 0.15s ease;
+  }
+  .resize-handle-vertical:hover::after,
+  .resize-handle-vertical[data-resize-handle-active]::after {
+    opacity: 0;
   }
 }
 
 /* 标签页顶部脉冲光晕动画——呼应产品名 "Pulse" */
 @keyframes tab-pulse-glow {
-  0%, 100% { border-top-color: rgba(240, 180, 41, 0.4); }
-  50% { border-top-color: rgba(240, 180, 41, 1); }
+  0%, 100% { border-top-color: var(--pulse-glow-dim); }
+  50% { border-top-color: var(--pulse-glow-bright); }
 }
 .tab-pulse-glow {
   animation: tab-pulse-glow 2.5s ease-in-out infinite;
@@ -156,9 +273,9 @@
 
 /* 快捷键闪烁反馈动画 */
 @keyframes flash-key {
-  0% { box-shadow: 0 0 0 0 rgba(240, 180, 41, 0.6); }
-  50% { box-shadow: 0 0 0 4px rgba(240, 180, 41, 0.3); }
-  100% { box-shadow: 0 0 0 0 rgba(240, 180, 41, 0); }
+  0% { box-shadow: 0 0 0 0 var(--pulse-flash-color); }
+  50% { box-shadow: 0 0 0 4px var(--pulse-flash-color); }
+  100% { box-shadow: 0 0 0 0 var(--pulse-flash-color); }
 }
 .flash-key {
   animation: flash-key 0.6s ease-out;

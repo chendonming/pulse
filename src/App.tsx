@@ -133,6 +133,12 @@ export default function App() {
     [state.openInTab],
   );
 
+  // 快速切换暗色/浅色主题
+  const toggleTheme = useCallback(() => {
+    const next = state.settings.theme === "dark" ? "light" : "dark";
+    state.updateSettings({ theme: next });
+  }, [state.settings.theme, state.updateSettings]);
+
   // 初始化快捷键引擎（仅挂载一次）
   useEffect(() => {
     const engine = new ShortcutEngine();
@@ -303,6 +309,7 @@ export default function App() {
 
   return (
     <div
+      data-theme={state.settingsLoaded ? state.settings.theme : "dark"}
       className="h-screen flex overflow-hidden bg-pulse-deepest"
       style={{
         fontFamily: state.settingsLoaded ? FONT_FAMILY_MAP[state.settings.fontFamily] || undefined : undefined,
@@ -361,6 +368,9 @@ export default function App() {
             onOpenInNewTab={openInNewTab}
             /* ── 打开设置面板 ── */
             onOpenSettings={state.openSettingsDialog}
+            /* ── 主题切换 ── */
+            theme={state.settings.theme}
+            onToggleTheme={toggleTheme}
           />
         </Panel>
 

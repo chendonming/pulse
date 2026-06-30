@@ -4,21 +4,22 @@ export default {
   theme: {
     extend: {
       // ============================================================
-      // Pulse 自定义调色板（深靛蓝/藏青色系 + 琥珀色强调色）
+      // Pulse 调色板（通过 CSS 变量实现暗色/浅色双主题切换）
+      // 变量值定义在 src/index.css 中
       // ============================================================
       colors: {
         pulse: {
           // 背景层级：最深 → 表面 → 隆起 → 悬停 → 边框
-          deepest: "#0B0D15",
-          surface: "#12141D",
-          elevated: "#1A1D28",
-          hover: "#222638",
-          border: "#2E3348",
+          deepest: "var(--pulse-deepest)",
+          surface: "var(--pulse-surface)",
+          elevated: "var(--pulse-elevated)",
+          hover: "var(--pulse-hover)",
+          border: "var(--pulse-border)",
           // 强调色（琥珀金）
-          accent: "#F0B429",
-          "accent-soft": "#F6D055",
-          "accent-dim": "#C4941F",
-          // 语义色
+          accent: "var(--pulse-accent)",
+          "accent-soft": "var(--pulse-accent-soft)",
+          "accent-dim": "var(--pulse-accent-dim)",
+          // 语义色（双主题保持不变）
           indigo: "#6366F1",
           blue: "#60A5FA",
           teal: "#2DD4BF",
@@ -29,9 +30,9 @@ export default {
           purple: "#A78BFA",
           // 文字层级：主要 → 次要 → 弱化
           text: {
-            primary: "#E8EAF0",
-            secondary: "#9499B3",
-            muted: "#656A82",
+            primary: "var(--pulse-text-primary)",
+            secondary: "var(--pulse-text-secondary)",
+            muted: "var(--pulse-text-muted)",
           },
         },
         // HTTP 方法颜色

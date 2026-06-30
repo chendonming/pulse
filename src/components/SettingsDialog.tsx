@@ -203,6 +203,48 @@ export default function SettingsDialog({
             </div>
           </section>
 
+          {/* ── 主题设置 ── */}
+          <section>
+            <h3 className="text-[11px] font-semibold text-pulse-text-muted uppercase tracking-wider mb-2.5">
+              Theme
+            </h3>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-pulse-text-secondary">
+                Appearance
+              </span>
+              <div className="flex items-center gap-1 bg-pulse-deepest border border-pulse-border rounded-lg p-0.5">
+                <button
+                  onClick={() => onUpdateSettings({ theme: "dark" })}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-150 ${
+                    settings.theme === "dark"
+                      ? "bg-pulse-accent text-pulse-deepest shadow-sm"
+                      : "text-pulse-text-muted hover:text-pulse-text-secondary"
+                  }`}
+                >
+                  {/* 月亮图标 —— 暗色模式 */}
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                  Dark
+                </button>
+                <button
+                  onClick={() => onUpdateSettings({ theme: "light" })}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-150 ${
+                    settings.theme === "light"
+                      ? "bg-pulse-accent text-pulse-deepest shadow-sm"
+                      : "text-pulse-text-muted hover:text-pulse-text-secondary"
+                  }`}
+                >
+                  {/* 太阳图标 —— 浅色模式 */}
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                  Light
+                </button>
+              </div>
+            </div>
+          </section>
+
           {/* ── 预览区 ── */}
           <section>
             <h3 className="text-[11px] font-semibold text-pulse-text-muted uppercase tracking-wider mb-2.5">
