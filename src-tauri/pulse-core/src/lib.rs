@@ -131,6 +131,7 @@ pub struct RequestInput {
 
 /** multipart/form-data 中的单个条目（文本值或文件） */
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FormDataEntry {
     pub key: String,
     /** 文本值（is_file=false 时使用） */
