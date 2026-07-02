@@ -8,6 +8,8 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { lintGutter, linter } from "@codemirror/lint";
 import { keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 
 /** JsonEditor 属性 */
 interface JsonEditorProps {
@@ -18,6 +20,62 @@ interface JsonEditorProps {
   /** "dark" | "light"，控制 CodeMirror 主题 */
   theme?: string;
 }
+
+// ===== 浅色主题：高对比度编辑器样式和语法高亮 =====
+/** 浅色主题下编辑器面板样式（背景、文字、选中、光标、行号等） */
+const lightEditorTheme = EditorView.theme(
+  {
+    "&": {
+      backgroundColor: "#ffffff",
+      color: "#1a1a2e",
+    },
+    ".cm-content": {
+      color: "#1a1a2e",
+      caretColor: "#1a1a2e",
+    },
+    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
+      backgroundColor: "#add6ff",
+    },
+    ".cm-activeLine": {
+      backgroundColor: "#f0f1f3",
+    },
+    ".cm-gutters": {
+      backgroundColor: "#f4f5f7",
+      color: "#4b5563",
+    },
+    ".cm-activeLineGutter": {
+      backgroundColor: "#e5e7eb",
+    },
+    ".cm-matchingBracket": {
+      backgroundColor: "#d3e3fd",
+      outline: "1px solid #87b9f9",
+    },
+    ".cm-foldPlaceholder": {
+      backgroundColor: "#f0f0f0",
+      border: "1px solid #d0d0d0",
+      color: "#6b7280",
+    },
+  },
+  { dark: false },
+);
+
+/** 浅色主题下 JSON 语法元素颜色（属性名、字符串、数字、关键字等） */
+const lightHighlightStyleExt = syntaxHighlighting(
+  HighlightStyle.define([
+    { tag: tags.propertyName, color: "#881391" },   // JSON 属性名（紫色）
+    { tag: tags.string, color: "#0451a5" },          // 字符串值（深蓝）
+    { tag: tags.number, color: "#098658" },          // 数字（深绿）
+    { tag: tags.bool, color: "#a31515" },            // true/false（深红）
+    { tag: tags.null, color: "#a31515" },             // null（深红）
+    { tag: tags.keyword, color: "#a31515" },          // 关键字（深红）
+    { tag: tags.separator, color: "#1a1a2e" },        // 逗号分隔符
+    { tag: tags.bracket, color: "#1a1a2e" },          // 括号
+    { tag: tags.punctuation, color: "#1a1a2e" },      // 标点符号
+  ]),
+);
+
+/** 浅色主题完整扩展（面板样式 + 语法高亮） */
+const lightThemeExt = [lightEditorTheme, lightHighlightStyleExt];
 
 /**
  * JsonEditor 组件
@@ -89,7 +147,7 @@ const JsonEditor: FC<JsonEditorProps> = ({ value, onChange, theme }) => {
         // Tab 键缩进支持
         keymap.of([indentWithTab]),
         // 暗色/浅色主题（通过 Compartment 支持运行时切换）
-        themeCompartmentRef.current.of(isDark ? oneDark : []),
+        themeCompartmentRef.current.of(isDark ? oneDark : lightThemeExt),
         // 自定义样式（通过 Compartment 支持运行时切换）
         styleCompartmentRef.current.of(customTheme),
         // 更新监听
@@ -141,7 +199,7 @@ const JsonEditor: FC<JsonEditorProps> = ({ value, onChange, theme }) => {
 
     view.dispatch({
       effects: [
-        themeCompartmentRef.current.reconfigure(isDark ? oneDark : []),
+        themeCompartmentRef.current.reconfigure(isDark ? oneDark : lightThemeExt),
         styleCompartmentRef.current.reconfigure(customTheme),
       ],
     });
