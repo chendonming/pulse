@@ -23,17 +23,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Dev Commands
 
 ```bash
-npm run tauri dev      # Launch Tauri app with hot-reload (Vite + Cargo)
 npm run dev            # Vite dev server only (http://localhost:1420)
 npm run build          # TypeScript check + Vite production build
+npm run preview        # Vite preview of production build
+npm run tauri dev      # Launch Tauri app with hot-reload (Vite + Cargo)
+npm run tauri:mock     # Tauri dev with mock-server feature enabled
 npm run tauri build    # Full Tauri production build (.msi/.exe)
 ```
 
-Rust commands run via `cargo` in `src-tauri/`:
+Rust commands (workspace = 6 crates in `src-tauri/`):
 ```bash
-cd src-tauri && cargo check     # Fast Rust compilation check
-cd src-tauri && cargo build     # Debug build
-cd src-tauri && cargo test      # Run Rust tests (none yet)
+cd src-tauri && cargo check          # Fast compilation check
+cd src-tauri && cargo build          # Debug build
+cd src-tauri && cargo test           # Run Rust tests
+cd src-tauri && cargo clippy         # Lint all crates
 ```
 
 Frontend type checking:
@@ -48,31 +51,64 @@ npx tsc --noEmit        # TypeScript check without emitting
 - **Backend**: Rust with Tauri 2 (desktop shell) + reqwest 0.12 (HTTP client)
 - **Desktop**: Tauri v2 (WebView2 on Windows)
 
-### Data Flow: Frontend → Rust → HTTP
+### Data Flow: Frontend → Rust (pulse-core) → HTTP
 
 ```
-React UI  ──invoke("send_request")──▶  Tauri Command  ──reqwest──▶  Target API
-              (IPC via @tauri-apps/api/core)    (Rust in src-tauri/src/lib.rs)
-                                                     │
+React UI  ──invoke("send_request")──▶  Tauri Command (src-tauri/src/lib.rs)
+              (IPC via @tauri-apps/api/core)    │
+                                                ├─ variable substitution (pulse-core)
+                                                ├─ execute_http_request (pulse-core/reqwest) ──▶ Target API
+                                                └─ response + logging ──▶ LogStore (Rust)
 Response JSON ◀─────── ResponseData ──────────────────┘
 ```
 
 All HTTP requests execute in the Rust backend via Tauri commands, which avoids CORS restrictions. The frontend never calls `fetch()` directly — it uses `invoke()` from `@tauri-apps/api/core` to call the `send_request` Rust function.
 
+### Workspace Crate Architecture (`src-tauri/`)
+
+The workspace contains 6 crates sharing types and logic via `pulse-core`:
+
+| Crate | Role |
+|-------|------|
+| `pulse` (main) | Tauri GUI — commands, log store, window management, `#[tauri::command]` handlers |
+| `pulse-core` | **Shared core** — types (`HeaderInput`, `ResponseData`, etc.), HTTP execution (reqwest), I/O/persistence, test runner, CLI dispatch. No Tauri dependency. |
+| `pulse-cli` | Standalone CLI binary (`npm run cli:run`), calls `pulse-core::cli::run()` |
+| `pulse-mcp` | MCP server over stdio (JSON-RPC 2.0), wraps `pulse-core` for AI agent integration |
+| `pulse-mock-server` | Optional mock HTTP server (axum), feature-gated behind `mock-server` |
+
+`pulse-core` types are re-exported from the main crate so `crate::HeaderInput` etc. still work.
+
 ### Key Structures
 
 - **`src/hooks/usePulse.ts`** — Single hook owning all app state (request params, response, history, collections). Every component receives state+setters via props from `App.tsx`. No context/Redux — props drilling is intentional for this scale.
-- **`src/types/index.ts`** — Mirrors Rust structs exactly (`HeaderInput`, `ResponseData`, `TimingInfo`). Keep in sync with `src-tauri/src/lib.rs` when changing types.
+- **`src/types/index.ts`** — Mirrors Rust structs from `pulse-core` exactly (`HeaderInput`, `ResponseData`, `TimingInfo`, etc.). Keep in sync with `pulse-core/src/lib.rs` when changing types.
+- **`src/shortcuts/`** — Keyboard shortcut engine (`ShortcutEngine.ts`), defaults, scope tracking. Commands defined in `defaults.ts`, scoped by active UI context.
 - **`tailwind.config.ts`** — Custom `pulse-*` color tokens (deep indigo/navy palette with amber/gold accent). Also defines `method-*` colors per HTTP verb.
-- **`src-tauri/src/lib.rs`** — Single `send_request` Tauri command. Accepts `RequestInput`, returns `ResponseData` via IPC. Timing is estimated (reqwest doesn't expose per-step timing natively).
+- **`src-tauri/pulse-core/src/lib.rs`** — Shared types, `execute_http_request()` (reqwest), `substitute_variables()`, I/O, test runner. No Tauri dependency, shared by GUI + CLI + MCP.
+- **`src-tauri/src/lib.rs`** — Tauri commands (`send_request`, `get_logs`, `clear_logs`, etc.), `LogStore`, window management (main + logs windows). Re-exports types from `pulse-core`.
 
-### Component Tree
+### Multi-window Entry (`src/main.tsx`)
+
+Two windows based on Tauri window label:
+- `"main"` → `<App />` (main UI)
+- `"logs"` → `<LogViewer />` (dedicated log viewer window)
+
+### Component Tree (main window)
 
 ```
 App
-├── Sidebar          — Collections list + History (tabs)
-├── RequestPanel     — URL bar + method selector + Send button + Headers/Body tabs
-└── ResponsePanel    — Status bar + WaterfallChart + Body/Headers tabs
+├── TabBar                    — Request tabs (open requests)
+├── Sidebar                   — Collections tree + History (tabs)
+├── RequestPanel              — URL bar + method selector + Send + Headers/Body/Auth tabs
+├── ResponsePanel             — Status bar + WaterfallChart + Body/Headers tabs
+├── ToastContainer            — Toast notifications
+├── SaveDialog                — Save request to collection
+├── ConfirmDialog             — Confirm actions
+├── PromptDialog              — Prompt for input
+├── ImportDialog              — Import (cURL, collections)
+├── ExportDialog              — Export collections
+├── TestScriptDialog          — Test script management
+└── SettingsDialog            — App settings
 ```
 
 ### Design System (Tailwind Classes)
@@ -91,6 +127,7 @@ Convenience component classes in `src/index.css`: `.panel`, `.btn-primary`, `.bt
 - `#[tauri::command]` functions must NOT be `pub` (Rust 2021 macro namespace conflict with Tauri v2)
 - Timing waterfall phases (DNS/TCP/TLS) are estimated as percentages of TTFB, not measured — reqwest lacks per-step timing hooks
 - Icons are pre-generated via sharp in `src-tauri/icons/`; regenerate with `node -e "require('sharp')..."` if the SVG changes
+- The `[mock-server]` feature adds axum + tokio dependencies; build with `npm run tauri:mock` to enable
 
 ## AI Agent 集成
 
@@ -122,6 +159,14 @@ npm run mcp:build          # 构建 MCP 服务器调试版
 npm run mcp:build:release  # 构建 MCP 服务器发布版
 npm run mcp:run            # 运行 MCP 服务器
 ```
+
+### Mock 服务器（开发测试用）
+```bash
+npm run mock-server:build          # 构建 mock 服务器调试版
+npm run mock-server:build:release  # 构建 mock 服务器发布版
+npm run mock-server:run            # 运行 mock 服务器
+```
+Mock server 监听端口由 `MOCK_PORT` 环境变量控制（默认 3001）。
 
 ### 典型工作流
 1. `create_test_script` 为新 API 创建测试脚本
