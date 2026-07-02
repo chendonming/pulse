@@ -16,6 +16,7 @@ import type {
   EnvironmentVariable,
   EnvironmentData,
   CollectionData,
+  ExtractRule,
   ImportExportStrategy,
   ImportPreview,
   ImportResult,
@@ -129,6 +130,8 @@ function createBlankTab(overrides?: Partial<TabState>): TabState {
     responseTab: "body" as "body" | "headers",
     editingRequest: null,
     savedSnapshot: null,
+    assertions: [],
+    extract: [],
     ...overrides,
   };
 }
@@ -155,6 +158,8 @@ function createTabFromRequest(item: RequestItem, collectionId: string): TabState
   const bodyFormData = item.bodyFormData?.length
     ? item.bodyFormData
     : [{ key: "", value: "", enabled: true, isFile: false, filePath: null, fileName: null, fileContentType: "" }];
+  const assertions = item.assertions ?? [];
+  const extract = item.extract ?? [];
 
   return {
     id: crypto.randomUUID(),
@@ -179,7 +184,11 @@ function createTabFromRequest(item: RequestItem, collectionId: string): TabState
     savedSnapshot: {
       method, url: url.trim(), headers, body, bodyParams, bodyFormData,
       contentType, authType, bearerToken, rawParams,
+      assertions: [...assertions],
+      extract: [...extract],
     },
+    assertions,
+    extract,
   };
 }
 
@@ -316,6 +325,8 @@ export function usePulse() {
   const bearerToken = activeTab.bearerToken;
   const rawParams = activeTab.rawParams;
   const requestTab = activeTab.requestTab;
+  const assertions = activeTab.assertions;
+  const extract = activeTab.extract;
   const response = activeTab.response;
   const isLoading = activeTab.isLoading;
   const error = activeTab.error;
@@ -337,12 +348,15 @@ export function usePulse() {
       activeTab.contentType !== s.contentType ||
       activeTab.authType !== s.authType ||
       activeTab.bearerToken !== s.bearerToken ||
-      JSON.stringify(activeTab.rawParams) !== JSON.stringify(s.rawParams)
+      JSON.stringify(activeTab.rawParams) !== JSON.stringify(s.rawParams) ||
+      JSON.stringify(activeTab.assertions) !== JSON.stringify(s.assertions) ||
+      JSON.stringify(activeTab.extract) !== JSON.stringify(s.extract)
     );
   }, [
     activeTab.method, activeTab.url, activeTab.headers,
     activeTab.body, activeTab.bodyParams, activeTab.bodyFormData, activeTab.contentType,
     activeTab.authType, activeTab.bearerToken, activeTab.rawParams,
+    activeTab.assertions, activeTab.extract,
     activeTab.savedSnapshot,
   ]);
 
@@ -676,6 +690,82 @@ export function usePulse() {
     [activeTabId],
   );
 
+  // ── 断言(Assertions) CRUD ──
+
+  const addAssertion = useCallback(() => {
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.id === activeTabId
+          ? { ...t, assertions: [...t.assertions, ""] }
+          : t,
+      ),
+    );
+  }, [activeTabId]);
+
+  const updateAssertion = useCallback(
+    (index: number, value: string) => {
+      setTabs((prev) =>
+        prev.map((t) => {
+          if (t.id !== activeTabId) return t;
+          const next = [...t.assertions];
+          next[index] = value;
+          return { ...t, assertions: next };
+        }),
+      );
+    },
+    [activeTabId],
+  );
+
+  const removeAssertion = useCallback(
+    (index: number) => {
+      setTabs((prev) =>
+        prev.map((t) => {
+          if (t.id !== activeTabId) return t;
+          return { ...t, assertions: t.assertions.filter((_, i) => i !== index) };
+        }),
+      );
+    },
+    [activeTabId],
+  );
+
+  // ── 响应提取规则(Extract Rules) CRUD ──
+
+  const addExtractRule = useCallback(() => {
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.id === activeTabId
+          ? { ...t, extract: [...t.extract, { name: "", source: "" }] }
+          : t,
+      ),
+    );
+  }, [activeTabId]);
+
+  const updateExtractRule = useCallback(
+    (index: number, field: keyof ExtractRule, value: string) => {
+      setTabs((prev) =>
+        prev.map((t) => {
+          if (t.id !== activeTabId) return t;
+          const next = [...t.extract];
+          next[index] = { ...next[index], [field]: value };
+          return { ...t, extract: next };
+        }),
+      );
+    },
+    [activeTabId],
+  );
+
+  const removeExtractRule = useCallback(
+    (index: number) => {
+      setTabs((prev) =>
+        prev.map((t) => {
+          if (t.id !== activeTabId) return t;
+          return { ...t, extract: t.extract.filter((_, i) => i !== index) };
+        }),
+      );
+    },
+    [activeTabId],
+  );
+
   // ── 响应状态 ──
 
   const clearResponse = useCallback(() => {
@@ -705,6 +795,8 @@ export function usePulse() {
             authType: t.authType,
             bearerToken: t.bearerToken,
             rawParams: t.rawParams,
+            assertions: [...t.assertions],
+            extract: [...t.extract],
           },
         };
       }),
@@ -1179,6 +1271,8 @@ export function usePulse() {
             authType: (item.authType as AuthType) ?? "none",
             bearerToken: item.bearerToken ?? "",
             rawParams: item.params?.length ? item.params : [{ key: "", value: "", enabled: true }],
+            assertions: item.assertions ?? [],
+            extract: item.extract ?? [],
             editingRequest: { collectionId, requestId: item.id },
           };
           // 立即设置已保存快照
@@ -1193,6 +1287,8 @@ export function usePulse() {
             authType: updated.authType,
             bearerToken: updated.bearerToken,
             rawParams: updated.rawParams,
+            assertions: [...updated.assertions],
+            extract: [...updated.extract],
           };
           return updated;
         }),
@@ -1227,6 +1323,8 @@ export function usePulse() {
       bearerToken: tabBearerToken,
       rawParams: tabRawParams,
       editingRequest: tabEditingRequest,
+      assertions: tabAssertions,
+      extract: tabExtract,
     } = activeTab;
 
     const bodyToSave = tabContentType === "application/x-www-form-urlencoded"
@@ -1263,6 +1361,8 @@ export function usePulse() {
                         params: tabRawParams,
                         bodyParams: tabBodyParams,
                         bodyFormData: tabBodyFormData,
+                        assertions: tabAssertions,
+                        extract: tabExtract,
                       }
                     : r,
                 ),
@@ -1296,6 +1396,8 @@ export function usePulse() {
       authType: tabAuthType,
       bearerToken: tabBearerToken,
       rawParams: tabRawParams,
+      assertions: tabAssertions,
+      extract: tabExtract,
     } = activeTab;
 
     const bodyToSave = tabContentType === "application/x-www-form-urlencoded"
@@ -1324,6 +1426,8 @@ export function usePulse() {
       params: tabRawParams,
       bodyParams: tabBodyParams,
       bodyFormData: tabBodyFormData,
+      assertions: tabAssertions,
+      extract: tabExtract,
     };
 
     let colId: string;
@@ -1857,6 +1961,14 @@ export function usePulse() {
     addParam,
     updateParam,
     removeParam,
+    assertions,
+    addAssertion,
+    updateAssertion,
+    removeAssertion,
+    extract,
+    addExtractRule,
+    updateExtractRule,
+    removeExtractRule,
     requestTab,
     setRequestTab,
     response,

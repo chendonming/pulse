@@ -460,6 +460,14 @@ export default function App() {
                   flashCommand={flashCommand}
                   shortcutHints={shortcutHints}
                   theme={state.settings.theme}
+                  assertions={state.assertions}
+                  onAddAssertion={state.addAssertion}
+                  onUpdateAssertion={state.updateAssertion}
+                  onRemoveAssertion={state.removeAssertion}
+                  extract={state.extract}
+                  onAddExtractRule={state.addExtractRule}
+                  onUpdateExtractRule={state.updateExtractRule}
+                  onRemoveExtractRule={state.removeExtractRule}
                 />
               </Panel>
 

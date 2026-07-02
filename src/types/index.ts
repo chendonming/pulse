@@ -147,7 +147,7 @@ export interface LogEntry {
 }
 
 /** 请求面板的 Tab 类型 */
-export type RequestTab = "params" | "auth" | "headers" | "body";
+export type RequestTab = "params" | "auth" | "headers" | "body" | "tests";
 /** 侧边栏的 Tab 类型 */
 export type SidebarTab = "collections" | "history" | "environments";
 
@@ -265,6 +265,8 @@ export interface TabSnapshot {
   authType: string;
   bearerToken: string;
   rawParams: HeaderInput[];
+  assertions: string[];
+  extract: ExtractRule[];
 }
 
 /** 单个标签页的完整状态 */
@@ -294,6 +296,10 @@ export interface TabState {
   // ── 编辑跟踪 ──
   editingRequest: { collectionId: string; requestId: string } | null;
   savedSnapshot: TabSnapshot | null;
+  /** 断言表达式列表，例如 "status == 200" */
+  assertions: string[];
+  /** 响应提取规则列表 */
+  extract: ExtractRule[];
 }
 
 // ============================================================

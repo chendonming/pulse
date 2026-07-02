@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import type { HeaderInput, FormDataEntry, RequestTab, HttpMethod, AuthType } from "../types";
+import type { HeaderInput, FormDataEntry, RequestTab, HttpMethod, AuthType, ExtractRule } from "../types";
 import AuthPanel from "./AuthPanel";
 import JsonEditor from "./JsonEditor";
 
@@ -54,6 +54,16 @@ interface RequestPanelProps {
   shortcutHints: { commandId: string; label: string }[];
   /** "dark" | "light" 主题，传递给 JsonEditor */
   theme: string;
+  /** 断言表达式列表 */
+  assertions: string[];
+  onAddAssertion: () => void;
+  onUpdateAssertion: (i: number, v: string) => void;
+  onRemoveAssertion: (i: number) => void;
+  /** 响应提取规则列表 */
+  extract: ExtractRule[];
+  onAddExtractRule: () => void;
+  onUpdateExtractRule: (i: number, f: keyof ExtractRule, v: string) => void;
+  onRemoveExtractRule: (i: number) => void;
 }
 
 /** 支持的 HTTP 方法列表 */
@@ -93,7 +103,7 @@ const CONTENT_TYPES = [
  *
  * 包含：
  * - URL 栏（方法选择器 + URL 输入框 + 保存按钮 + 发送按钮）
- * - 四个配置 Tab：Auth / Params / Headers / Body
+ * - 五个配置 Tab：Auth / Params / Headers / Body / Tests
  *
  * 快捷键 Ctrl+Enter（或 Cmd+Enter）由 ShortcutEngine 统一管理
  */
@@ -141,6 +151,14 @@ export default function RequestPanel({
   flashCommand,
   shortcutHints,
   theme,
+  assertions,
+  onAddAssertion,
+  onUpdateAssertion,
+  onRemoveAssertion,
+  extract,
+  onAddExtractRule,
+  onUpdateExtractRule,
+  onRemoveExtractRule,
 }: RequestPanelProps) {
   const urlRef = useRef<HTMLInputElement>(null);
 
@@ -392,6 +410,26 @@ export default function RequestPanel({
           {(body || bodyParams.some((p) => p.key.trim())) && (
             <span className="ml-1.5 px-1 py-0.5 text-[10px] rounded bg-pulse-accent/10 text-pulse-accent">
               ●
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => onRequestTabChange("tests")}
+          className={`pb-2 pt-1 px-3 text-xs font-medium transition-all duration-150 border-b-2 ${
+            requestTab === "tests"
+              ? "text-pulse-accent border-pulse-accent bg-pulse-accent/[0.04]"
+              : "text-pulse-text-muted border-transparent hover:text-pulse-text-secondary hover:border-pulse-border hover:bg-pulse-hover/50"
+          }`}
+        >
+          Tests
+          {assertions.length > 0 && (
+            <span className="ml-1.5 px-1 py-0.5 text-[10px] rounded bg-pulse-accent/10 text-pulse-accent">
+              {assertions.length}
+            </span>
+          )}
+          {extract.length > 0 && (
+            <span className="ml-1.5 px-1 py-0.5 text-[10px] rounded bg-pulse-indigo/10 text-pulse-indigo">
+              {extract.length}
             </span>
           )}
         </button>
@@ -840,6 +878,96 @@ export default function RequestPanel({
                 spellCheck={false}
               />
             )}
+          </div>
+        )}
+
+        {/* Tests Tab：断言 + 响应提取规则 */}
+        {requestTab === "tests" && (
+          <div className="p-2 space-y-3">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] text-pulse-text-muted font-medium">Assertions</span>
+                <button
+                  onClick={onAddAssertion}
+                  className="btn-ghost text-xs py-0.5 px-2"
+                >
+                  + Add
+                </button>
+              </div>
+              {assertions.length === 0 && (
+                <p className="text-[11px] text-pulse-text-muted/50 italic px-1">
+                  No assertions — response will be treated as passed
+                </p>
+              )}
+              {assertions.map((expr, i) => (
+                <div key={i} className="flex items-center gap-1.5 mb-1">
+                  <input
+                    type="text"
+                    value={expr}
+                    onChange={(e) => onUpdateAssertion(i, e.target.value)}
+                    placeholder='e.g. status == 200'
+                    className="flex-1 bg-pulse-deepest border border-pulse-border rounded px-2 py-1 text-xs font-mono text-pulse-text-primary placeholder-pulse-text-muted/50 transition-colors"
+                  />
+                  <button
+                    onClick={() => onRemoveAssertion(i)}
+                    className="text-pulse-text-muted hover:text-pulse-rose transition-colors p-0.5 shrink-0"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-pulse-border/50 pt-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] text-pulse-text-muted font-medium">
+                  Extract Variables <span className="text-pulse-text-muted/50 font-normal">(JSON Path → {'{{name}}'})</span>
+                </span>
+                <button
+                  onClick={onAddExtractRule}
+                  className="btn-ghost text-xs py-0.5 px-2"
+                >
+                  + Add
+                </button>
+              </div>
+              {extract.length === 0 && (
+                <p className="text-[11px] text-pulse-text-muted/50 italic px-1">
+                  Extract values from JSON response into variables for chaining requests
+                </p>
+              )}
+              <div className="grid grid-cols-[1fr_1fr_24px] gap-1.5 text-[11px] text-pulse-text-muted font-medium px-2 pb-1">
+                <span>Variable Name</span>
+                <span>JSON Path (e.g. body.data.token)</span>
+              </div>
+              {extract.map((rule, i) => (
+                <div key={i} className="grid grid-cols-[1fr_1fr_24px] gap-1.5 items-center mb-1">
+                  <input
+                    type="text"
+                    value={rule.name}
+                    onChange={(e) => onUpdateExtractRule(i, "name", e.target.value)}
+                    placeholder="Variable name"
+                    className="bg-pulse-deepest border border-pulse-border rounded px-2 py-1 text-xs font-mono text-pulse-text-primary placeholder-pulse-text-muted/50 transition-colors"
+                  />
+                  <input
+                    type="text"
+                    value={rule.source}
+                    onChange={(e) => onUpdateExtractRule(i, "source", e.target.value)}
+                    placeholder="body.data.token"
+                    className="bg-pulse-deepest border border-pulse-border rounded px-2 py-1 text-xs font-mono text-pulse-text-primary placeholder-pulse-text-muted/50 transition-colors"
+                  />
+                  <button
+                    onClick={() => onRemoveExtractRule(i)}
+                    className="text-pulse-text-muted hover:text-pulse-rose transition-colors p-0.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
