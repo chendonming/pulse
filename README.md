@@ -4,6 +4,8 @@
 
 Pulse is a cross-platform desktop application for crafting HTTP requests, inspecting responses, and organizing API workflows. It combines the speed and safety of a Rust backend with a responsive React frontend, delivering a native experience without Electron's overhead.
 
+![](./static/screenshot-20260702-235725.png)
+
 ---
 
 ## Features
