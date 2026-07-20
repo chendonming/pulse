@@ -237,6 +237,32 @@ function mergeRequestVariables(
   }));
 }
 
+/** 空标签页时的安全降级默认值（tabs 数组为空时使用，引用稳定不触发重渲染） */
+const EMPTY_TAB_FALLBACK: TabState = {
+  id: "",
+  title: "New Request",
+  createdAt: 0,
+  method: "GET" as HttpMethod,
+  url: "",
+  headers: [],
+  body: "",
+  bodyParams: [],
+  bodyFormData: [],
+  contentType: "application/json",
+  authType: "none" as AuthType,
+  bearerToken: "",
+  rawParams: [],
+  requestTab: "headers" as RequestTab,
+  response: null,
+  isLoading: false,
+  error: null,
+  responseTab: "body" as "body" | "headers",
+  editingRequest: null,
+  savedSnapshot: null,
+  assertions: [],
+  extract: [],
+};
+
 export function usePulse() {
   // ── 标签页状态：核心数据结构 ──
   const [tabs, setTabs] = useState<TabState[]>(() => [createBlankTab()]);
@@ -247,8 +273,8 @@ export function usePulse() {
     setActiveTabId(tabs[0].id);
   }
 
-  // 推导当前激活标签页
-  const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
+  // 推导当前激活标签页（tabs 为空时使用安全降级默认值）
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0] ?? EMPTY_TAB_FALLBACK;
 
   // ── 标签页管理函数 ──
 
@@ -259,26 +285,18 @@ export function usePulse() {
     setActiveTabId(tab.id);
   }, []);
 
-  /** 关闭指定标签页（若为最后一个则自动创建空白标签页） */
+  /** 关闭指定标签页（允许全部关闭，tabs 可变为空） */
   const closeTab = useCallback(
     (tabId: string) => {
-      // 预先创建空白标签页，确保两个 setState 使用同一个 ID
-      const fallbackTab = createBlankTab();
-      setTabs((prev) => {
-        if (prev.length <= 1) {
-          // 关闭最后一个标签页 → 使用预先创建的空白标签页替代
-          return [fallbackTab];
-        }
-        return prev.filter((t) => t.id !== tabId);
-      });
+      setTabs((prev) => prev.filter((t) => t.id !== tabId));
       setActiveTabId((prevId) => {
         if (prevId !== tabId) return prevId; // 关闭的不是当前标签页
-        if (tabs.length <= 1) {
-          // 关闭最后一个标签页 → 切换到预先创建的空白标签页
-          return fallbackTab.id;
+        const remaining = tabs.filter((t) => t.id !== tabId);
+        if (remaining.length === 0) {
+          // 最后一个标签页被删除 → activeTabId 置空
+          return "";
         }
         // 切换到左侧相邻标签页，若无则切到右侧
-        const remaining = tabs.filter((t) => t.id !== tabId);
         const idx = tabs.findIndex((t) => t.id === tabId);
         const target = Math.max(0, Math.min(idx, remaining.length - 1));
         return remaining[target]?.id ?? tabId;

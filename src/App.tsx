@@ -399,9 +399,24 @@ export default function App() {
             onNewTab={state.newTab}
           />
 
-          {/* 请求面板 + 响应面板（垂直可拖拽） */}
+          {/* 请求面板 + 响应面板（垂直可拖拽）或空状态 */}
           <div className="flex-1 min-h-0 flex flex-col">
-            <PanelGroup
+            {state.tabs.length === 0 ? (
+              /* ── 无标签页空状态 ── */
+              <div className="flex-1 flex flex-col items-center justify-center text-center select-none">
+                <div className="mb-6 opacity-20">
+                  <svg className="w-20 h-20 mx-auto text-pulse-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <p className="text-pulse-text-muted text-sm mb-1">No open tabs</p>
+                <p className="text-pulse-text-muted/50 text-xs">
+                  Click <kbd className="px-1 py-0.5 rounded bg-pulse-elevated text-pulse-accent text-[10px] font-mono">+</kbd> or press{" "}
+                  <kbd className="px-1 py-0.5 rounded bg-pulse-elevated text-pulse-text-secondary text-[10px] font-mono">Ctrl+T</kbd> to create a new request
+                </p>
+              </div>
+            ) : (
+              <PanelGroup
               orientation="vertical"
               defaultLayout={{
                 "request-panel": state.settings.requestPanelHeight ?? 35,
@@ -485,6 +500,7 @@ export default function App() {
                 />
               </Panel>
             </PanelGroup>
+            )}
           </div>
         </Panel>
       </PanelGroup>
