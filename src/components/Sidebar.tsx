@@ -114,6 +114,7 @@ function SortableColHeader({
   colorClass,
   collapsed,
   onToggle,
+  onNewRequest,
   onDelete,
 }: {
   id: string;
@@ -125,6 +126,8 @@ function SortableColHeader({
   collapsed: boolean;
   /** 切换折叠/展开 */
   onToggle: () => void;
+  /** 在当前集合中创建新请求 */
+  onNewRequest: () => void;
   /** 删除集合 */
   onDelete: () => void;
 }) {
@@ -186,6 +189,16 @@ function SortableColHeader({
           {count}
         </span>
       )}
+      {/* 在当前集合中新建请求（悬停时显示） */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onNewRequest(); }}
+        className="w-5 h-5 flex items-center justify-center rounded text-pulse-text-muted/40 hover:text-pulse-accent hover:bg-pulse-hover transition-all opacity-0 group-hover:opacity-100"
+        title="New Request in this collection"
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
       {/* 删除集合按钮（悬停时显示） */}
       <button
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -354,6 +367,8 @@ interface SidebarProps {
   onLoadHistory: (item: HistoryItem) => void;
   onLoadRequest: (item: RequestItem, collectionId: string) => void;
   onNewRequest: () => void;
+  /** 在指定集合中创建新请求 */
+  onNewRequestInCollection: (collectionId: string) => void;
   onDeleteRequest: (collectionId: string, requestId: string) => void;
   onRenameRequest: (collectionId: string, requestId: string) => void;
   onAddCollection: () => void;
@@ -421,6 +436,7 @@ export default memo(function Sidebar({
   onLoadHistory,
   onLoadRequest,
   onNewRequest,
+  onNewRequestInCollection,
   onDeleteRequest,
   onRenameRequest,
   onAddCollection,
@@ -728,6 +744,7 @@ export default memo(function Sidebar({
                               colorClass={colorClass}
                               collapsed={collapsedCols.has(col.id)}
                               onToggle={() => toggleCollapseCol(col.id)}
+                              onNewRequest={() => onNewRequestInCollection(col.id)}
                               onDelete={() => onDeleteCollection(col.id)}
                             />
 

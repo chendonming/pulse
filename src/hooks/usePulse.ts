@@ -1305,6 +1305,41 @@ export function usePulse() {
     setActiveTabId(tab.id);
   }, []);
 
+  /** 在指定集合中创建新请求（立即添加到集合并打开标签页） */
+  const newRequestInCollection = useCallback((collectionId: string) => {
+    const newReq: RequestItem = {
+      id: crypto.randomUUID(),
+      name: "New Request",
+      method: "GET",
+      url: "",
+      headers: [{ key: "", value: "", enabled: true }],
+      body: "{\n  \n}",
+      contentType: "application/json",
+      authType: "inherit",
+      bearerToken: "",
+      params: [{ key: "", value: "", enabled: true }],
+      bodyParams: [{ key: "", value: "", enabled: true }],
+      bodyFormData: [{
+        key: "", value: "", enabled: true,
+        isFile: false, filePath: null, fileName: null, fileContentType: "",
+      }],
+      assertions: [],
+      extract: [],
+    };
+
+    setCollections((prev) =>
+      prev.map((c) =>
+        c.id === collectionId
+          ? { ...c, requests: [...c.requests, newReq] }
+          : c,
+      ),
+    );
+
+    const tab = createTabFromRequest(newReq, collectionId);
+    setTabs((prev) => [...prev, tab]);
+    setActiveTabId(tab.id);
+  }, []);
+
   // ── 内联保存命名对话框状态 ──
 
   const [saveDialogVisible, setSaveDialogVisible] = useState(false);
@@ -1989,6 +2024,7 @@ export function usePulse() {
     clearResponse,
     /* ── 集合 CRUD ── */
     newRequest,
+    newRequestInCollection,
     saveCurrentRequest,
     deleteCollectionRequest,
     renameCollectionRequest,

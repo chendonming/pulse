@@ -352,6 +352,7 @@ export default function App() {
             onLoadRequest={smartLoadCollectionRequest}
             /* ── 新建请求 & 集合管理 ── */
             onNewRequest={state.newTab}
+            onNewRequestInCollection={state.newRequestInCollection}
             onDeleteRequest={state.deleteCollectionRequest}
             onRenameRequest={state.renameCollectionRequest}
             onAddCollection={state.addCollection}
